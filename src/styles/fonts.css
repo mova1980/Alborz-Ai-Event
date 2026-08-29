@@ -1,0 +1,96 @@
+/* Local display faces — drop files into /public/fonts and they take over. */
+
+@font-face {
+  font-family: 'Modam';
+  src:
+    url('/fonts/Modam/Modam[wght].woff2') format('woff2-variations'),
+    url('/fonts/Modam/Modam-Regular.woff2') format('woff2'),
+    url('/fonts/Modam/Modam-Regular.woff') format('woff'),
+    url('/fonts/Modam/Modam-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Modam';
+  src:
+    url('/fonts/Modam/Modam-Medium.woff2') format('woff2'),
+    url('/fonts/Modam/Modam-Medium.woff') format('woff'),
+    url('/fonts/Modam/Modam-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Modam';
+  src:
+    url('/fonts/Modam/Modam-SemiBold.woff2') format('woff2'),
+    url('/fonts/Modam/Modam-SemiBold.woff') format('woff'),
+    url('/fonts/Modam/Modam-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Modam';
+  src:
+    url('/fonts/Modam/Modam-Bold.woff2') format('woff2'),
+    url('/fonts/Modam/Modam-Bold.woff') format('woff'),
+    url('/fonts/Modam/Modam-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Modam';
+  src:
+    url('/fonts/Modam/Modam-ExtraBold.woff2') format('woff2'),
+    url('/fonts/Modam/Modam-ExtraBold.woff') format('woff'),
+    url('/fonts/Modam/Modam-ExtraBold.ttf') format('truetype');
+  font-weight: 800;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Modam';
+  src:
+    url('/fonts/Modam/Modam-Black.woff2') format('woff2'),
+    url('/fonts/Modam/Modam-Black.woff') format('woff'),
+    url('/fonts/Modam/Modam-Black.ttf') format('truetype');
+  font-weight: 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IRANSans';
+  src:
+    url('/fonts/IRANSans/IRANSans-Regular.woff2') format('woff2'),
+    url('/fonts/IRANSans/IranSans-Regular.woff2') format('woff2'),
+    url('/fonts/IRANSans/IRANSansX-Regular.woff2') format('woff2'),
+    url('/fonts/IRANSans/IRANSans-Regular.woff') format('woff'),
+    url('/fonts/IRANSans/IRANSans-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'IRANSans';
+  src:
+    url('/fonts/IRANSans/IRANSans-Medium.woff2') format('woff2'),
+    url('/fonts/IRANSans/IranSans-Medium.woff2') format('woff2'),
+    url('/fonts/IRANSans/IRANSans-Medium.woff') format('woff');
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'IRANSans';
+  src:
+    url('/fonts/IRANSans/IRANSans-Bold.woff2') format('woff2'),
+    url('/fonts/IRANSans/IranSans-Bold.woff2') format('woff2'),
+    url('/fonts/IRANSans/IRANSans-Bold.woff') format('woff');
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'IRANSans';
+  src:
+    url('/fonts/IRANSans/IRANSans-Light.woff2') format('woff2'),
+    url('/fonts/IRANSans/IRANSans-Light.woff') format('woff');
+  font-weight: 300;
+  font-display: swap;
+}
