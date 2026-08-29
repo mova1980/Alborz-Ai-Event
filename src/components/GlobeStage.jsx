@@ -21,6 +21,17 @@ export default function GlobeStage() {
     const showFallback = () => {
       if (fallback.current) fallback.current.style.opacity = '1'
       canvas.style.opacity = '0'
+      canvas.style.display = 'none'
+    }
+
+    const preferLite =
+      window.matchMedia('(pointer: coarse)').matches ||
+      window.matchMedia('(max-width: 700px)').matches ||
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+    if (preferLite) {
+      showFallback()
+      return
     }
 
     try {
@@ -154,7 +165,7 @@ export default function GlobeStage() {
       <div className="globe-halo" />
       <img
         ref={fallback}
-        className="earth-photo"
+        className="earth-photo earth-spin"
         src="/images/earth-globe.png"
         alt=""
         style={{ position: 'absolute', opacity: 1, zIndex: 1 }}

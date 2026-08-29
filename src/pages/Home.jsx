@@ -9,7 +9,7 @@ import LineArt from '../components/LineArt'
 
 export default function Home() {
   const ready = useContext(ReadyCtx)
-  const { t, path } = useI18n()
+  const { t, path, n2 } = useI18n()
   const [hRef, hOn] = useInView('80px')
   const [qRef, qOn] = useInView('80px')
   const [cRef, cOn] = useInView('80px')
@@ -21,11 +21,16 @@ export default function Home() {
       <section className={`headlines ${hOn ? 'is-on' : ''}`} ref={hRef} id="headLines">
         <h2 className="display">{t.headlines.title}</h2>
         <ul>
-          {t.headlines.items.map((it) => (
-            <li key={it.title}>
-              <Link to={path(it.href)}>
-                <div className="itemdate"><span>{it.date}</span></div>
-                <div className="htitle">{it.title}</div>
+          {t.headlines.items.map((it, i) => (
+            <li key={it.title} style={{ '--stagger': i }}>
+              <Link className="headline-card" to={path(it.href)}>
+                <span className="hc-corners" aria-hidden="true" />
+                <span className="hc-index">{n2(i + 1)}</span>
+                <div className="hc-body">
+                  <div className="itemdate"><span>{it.date}</span></div>
+                  <div className="htitle">{it.title}</div>
+                </div>
+                <span className="hc-go" aria-hidden="true" />
               </Link>
             </li>
           ))}

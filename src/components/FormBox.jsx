@@ -19,11 +19,11 @@ export default function FormBox({ variant = 'visit' }) {
         setSent(true)
       }}
     >
-      <label>{f.name}<input required name="name" /></label>
-      <label>{f.org}<input required name="org" /></label>
-      <label>{f.role}<input name="role" /></label>
-      <label>{f.email}<input required type="email" name="email" /></label>
-      <label>{f.phone}<input required name="phone" /></label>
+      <label>{f.name}<input required name="name" autoComplete="name" /></label>
+      <label>{f.org}<input required name="org" autoComplete="organization" /></label>
+      <label>{f.role}<input name="role" autoComplete="organization-title" /></label>
+      <label>{f.email}<input required type="email" name="email" autoComplete="email" inputMode="email" /></label>
+      <label>{f.phone}<input required name="phone" autoComplete="tel" inputMode="tel" /></label>
       {variant !== 'problem' && (
         <label>
           {f.type}

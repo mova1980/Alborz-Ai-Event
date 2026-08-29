@@ -4,12 +4,15 @@ import DiamondButton from './DiamondButton'
 import GlobeStage from './GlobeStage'
 import LineArt from './LineArt'
 import ErrorBoundary from './ErrorBoundary'
+import HeroTitle from './HeroTitle'
+
+const FX = ['geo', 'ai', 'link']
 
 function GlobeFallback() {
   return (
     <div className="globe-stage">
       <div className="globe-halo" />
-      <img className="earth-photo" src="/images/earth-globe.png" alt="" />
+      <img className="earth-photo earth-spin" src="/images/earth-globe.png" alt="" />
     </div>
   )
 }
@@ -55,7 +58,7 @@ function useCountdown(target) {
 }
 
 export default function Hero({ ready }) {
-  const { t, path } = useI18n()
+  const { t, path, n2 } = useI18n()
   const [idx, setIdx] = useState(0)
   const [slideIn, setSlideIn] = useState(false)
   const [on, setOn] = useState(false)
@@ -89,11 +92,15 @@ export default function Hero({ ready }) {
       <div className="hero-copy">
         <div className="aligner">
           <div className="hero-kicker">{t.hero.kicker}</div>
-          <div id="textSlides">
+          <div id="textSlides" aria-live="polite">
             <ul>
               {t.hero.slides.map((s, i) => (
                 <li key={s.title} className={`${i === idx ? 'current' : ''} ${i === idx && slideIn ? 'slide-in' : ''}`}>
-                  <div className="hero-title display">{s.title}</div>
+                  {i === idx && on ? (
+                    <HeroTitle key={`${s.title}-go`} text={s.title} fx={FX[i] || 'geo'} />
+                  ) : (
+                    <div className="hero-title display">{s.title}</div>
+                  )}
                   <div className="animated-titles">
                     <div className="secondtitle">{s.second}</div>
                     <div className="firsttitle">{s.first}</div>
@@ -113,7 +120,7 @@ export default function Hero({ ready }) {
                 [count.seconds, t.countdown.seconds],
               ].map(([n, l]) => (
                 <div key={l}>
-                  <b>{String(n).padStart(2, '0')}</b>
+                  <b>{n2(n)}</b>
                   <span>{l}</span>
                 </div>
               ))}

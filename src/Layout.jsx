@@ -26,6 +26,7 @@ export default function Layout() {
     let id
     ;(async () => {
       try {
+        if (window.matchMedia('(pointer: coarse)').matches) return
         const { default: Lenis } = await import('lenis')
         const lenis = new Lenis({ lerp: 0.08, smoothWheel: true })
         const raf = (time) => {
@@ -74,6 +75,14 @@ export default function Layout() {
         menuOpen={menuOpen}
         setMenuOpen={setMenuOpen}
       />
+      {menuOpen ? (
+        <button
+          type="button"
+          className="nav-backdrop"
+          aria-label={t.nav.close}
+          onClick={() => setMenuOpen(false)}
+        />
+      ) : null}
       <div className="site-shift">
         <Outlet />
         <Footer />
