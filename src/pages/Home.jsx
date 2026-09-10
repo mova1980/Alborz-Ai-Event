@@ -6,6 +6,7 @@ import useInView from '../hooks/useInView'
 import Hero from '../components/Hero'
 import DiamondButton from '../components/DiamondButton'
 import LineArt from '../components/LineArt'
+import OrganizerBanner from '../components/OrganizerBanner'
 
 export default function Home() {
   const ready = useContext(ReadyCtx)
@@ -13,6 +14,7 @@ export default function Home() {
   const [hRef, hOn] = useInView('80px')
   const [qRef, qOn] = useInView('80px')
   const [cRef, cOn] = useInView('80px')
+  const [pRef, pOn] = useInView('80px')
 
   return (
     <main id="mainContent">
@@ -106,7 +108,7 @@ export default function Home() {
               <p className="sub">{d.sub}</p>
               <ul>
                 {d.items.slice(0, 4).map((it) => (
-                  <li key={it.t}><span>{it.t}</span><em>{it.d}</em></li>
+                  <li key={`${it.t}-${it.d}`}><span>{it.t}</span><em>{it.d}</em></li>
                 ))}
               </ul>
             </article>
@@ -121,10 +123,15 @@ export default function Home() {
         <div><span>{t.ghost}  {t.ghost}</span></div>
       </div>
 
-      <section className="partners">
-        <h2 className="section-title">{t.partners.title}</h2>
-        <ul>
-          {t.partners.items.map((p) => <li key={p}>{p}</li>)}
+      <section className={`partners ${pOn ? 'is-on' : ''}`} ref={pRef}>
+        <div className="kicker">{t.partners.orgKicker}</div>
+        <h2 className="section-title">{t.partners.organizersTitle}</h2>
+        <OrganizerBanner />
+        <h2 className="section-title supporters-title">{t.partners.supportersTitle}</h2>
+        <ul className="support-list">
+          {t.partners.supporters.map((p, i) => (
+            <li key={p} style={{ '--stagger': i }}>{p}</li>
+          ))}
         </ul>
       </section>
     </main>

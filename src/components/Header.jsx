@@ -2,6 +2,7 @@ import { NavLink, Link } from 'react-router-dom'
 import { useI18n } from '../context/Language'
 import Logo from './Logo'
 import MercLockup from './MercLockup'
+import NasrLockup from './NasrLockup'
 
 const ITEMS = [
   ['program', '/program'],
@@ -21,6 +22,8 @@ export default function Header({ onSearch, menuOpen, setMenuOpen }) {
           <Logo />
           <span className="brand-rule" aria-hidden="true" />
           <MercLockup />
+          <span className="brand-rule brand-rule-nasr" aria-hidden="true" />
+          <NasrLockup />
         </div>
 
         <nav id="mainNav" className={menuOpen ? 'target' : ''} aria-label={t.nav.menu}>

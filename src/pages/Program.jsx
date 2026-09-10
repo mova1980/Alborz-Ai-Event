@@ -15,7 +15,7 @@ export default function Program() {
           <article className="day">
             <ul>
               {d.items.map((it) => (
-                <li key={it.t}><span>{it.t}</span><em>{it.d}</em></li>
+                <li key={`${it.t}-${it.d}`}><span>{it.t}</span><em>{it.d}</em></li>
               ))}
             </ul>
           </article>

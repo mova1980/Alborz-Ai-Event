@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 
-const TEX = 'https://unpkg.com/three-globe@2.44.1/example/img/earth-blue-marble.jpg'
-const NIGHT = 'https://unpkg.com/three-globe@2.44.1/example/img/earth-night.jpg'
+const TEX = '/images/earth-blue-marble.jpg'
+const NIGHT = '/images/earth-night.jpg'
 
 export default function GlobeStage() {
   const wrap = useRef(null)
