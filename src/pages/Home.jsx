@@ -7,6 +7,7 @@ import Hero from '../components/Hero'
 import DiamondButton from '../components/DiamondButton'
 import LineArt from '../components/LineArt'
 import OrganizerBanner from '../components/OrganizerBanner'
+import Colleagues from '../components/Colleagues'
 
 export default function Home() {
   const ready = useContext(ReadyCtx)
@@ -127,6 +128,7 @@ export default function Home() {
         <div className="kicker">{t.partners.orgKicker}</div>
         <h2 className="section-title">{t.partners.organizersTitle}</h2>
         <OrganizerBanner />
+        <Colleagues />
         <h2 className="section-title supporters-title">{t.partners.supportersTitle}</h2>
         <ul className="support-list">
           {t.partners.supporters.map((p, i) => (

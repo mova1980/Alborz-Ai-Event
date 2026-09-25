@@ -1,10 +1,13 @@
 import { useState } from 'react'
 import DiamondButton from './DiamondButton'
 import { useI18n } from '../context/Language'
+import { api } from '../lib/api'
 
 export default function FormBox({ variant = 'visit' }) {
   const { t } = useI18n()
   const [sent, setSent] = useState(false)
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
   const f = t.form
 
   if (sent) return <div className="form-success">{f.sent}</div>
@@ -14,11 +17,47 @@ export default function FormBox({ variant = 'visit' }) {
   return (
     <form
       className="form"
-      onSubmit={(e) => {
+      onSubmit={async (e) => {
         e.preventDefault()
-        setSent(true)
+        setErr('')
+        setBusy(true)
+        const fd = new FormData(e.target)
+        const extra = {}
+        if (variant === 'problem') {
+          extra.problem = {
+            title: fd.get('ptitle'),
+            current: fd.get('current'),
+            data: fd.get('data'),
+            goal: fd.get('goal'),
+            kpi: fd.get('kpi'),
+            budget: fd.get('budget'),
+            time: fd.get('time'),
+          }
+        }
+        try {
+          await api('/messages', {
+            method: 'POST',
+            body: {
+              kind: variant,
+              name: fd.get('name'),
+              org: fd.get('org'),
+              role: fd.get('role'),
+              email: fd.get('email'),
+              phone: fd.get('phone'),
+              type: fd.get('type') || '',
+              message: fd.get('message') || '',
+              extra,
+            },
+          })
+          setSent(true)
+        } catch (ex) {
+          setErr(ex.message)
+        } finally {
+          setBusy(false)
+        }
       }}
     >
+      {err ? <div className="form-error">{err}</div> : null}
       <label>{f.name}<input required name="name" autoComplete="name" /></label>
       <label>{f.org}<input required name="org" autoComplete="organization" /></label>
       <label>{f.role}<input name="role" autoComplete="organization-title" /></label>
@@ -44,7 +83,7 @@ export default function FormBox({ variant = 'visit' }) {
         </>
       )}
       {variant !== 'problem' && <label>{f.message}<textarea name="message" /></label>}
-      <DiamondButton type="submit">{f.submit}</DiamondButton>
+      <DiamondButton type="submit">{busy ? '…' : f.submit}</DiamondButton>
     </form>
   )
 }

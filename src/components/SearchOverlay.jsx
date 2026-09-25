@@ -14,6 +14,7 @@ export default function SearchOverlay({ open, onClose }) {
     { t: t.nav.visit, p: '/visit' },
     { t: t.nav.problems, p: '/problems' },
     { t: t.nav.venue, p: '/venue' },
+    { t: t.nav.register, p: '/register' },
     { t: t.brand.tagline, p: '/' },
     { t: t.brand.theme, p: '/problems' },
     { t: t.hero.ctaBooth, p: '/exhibit' },

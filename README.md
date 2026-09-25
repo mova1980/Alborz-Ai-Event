@@ -101,3 +101,17 @@ location / {
 - پورت ۵۱۷۳ اشغال است → همان پورت را آزاد کن (`vite.config.js` روی ۵۱۷۳ قفل است)
 - `npm install` خطا داد → داخل پوشه پروژه هستی؟ `package.json` باید دیده شود
 - صفحه سفید → آدرس باید `http://localhost:5173` باشد نه فایل HTML
+
+## ثبت‌نام، QR، پیامک، پنل
+
+دامنه تولید: https://www.alborz-digitex.ir/
+
+| مسیر | نقش |
+|---|---|
+| `/register` | ثبت‌نام شرکت + OTP موبایل ۰۹ + QR یکتا |
+| `/status/:code` | پایش وضعیت با QR / کد پیگیری |
+| `/admin` | پنل مدیریت |
+
+کاربران پنل: `admin` / `Digitex@123456` (کامل) و `supervisor` / `123456` (ثبت‌نام و پیام‌ها).
+
+پیامک و دیتابیس: فایل‌های `.env.example` و `SMS-SETUP.md`. روی Vercel حتماً `DATABASE_URL` (Neon) و کلید SMS را در Environment Variables بگذارید و Redeploy کنید. بدون `DATABASE_URL` داده روی سرورلس Vercel ماندگار نیست.

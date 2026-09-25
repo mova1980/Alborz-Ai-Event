@@ -9,6 +9,7 @@ const ITEMS = [
   ['exhibit', '/exhibit'],
   ['visit', '/visit'],
   ['problems', '/problems'],
+  ['register', '/register'],
   ['venue', '/venue'],
 ]
 

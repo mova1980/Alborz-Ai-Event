@@ -1,9 +1,10 @@
 import PageShell from './PageShell'
 import FormBox from '../components/FormBox'
+import DiamondButton from '../components/DiamondButton'
 import { useI18n } from '../context/Language'
 
 export default function Exhibit() {
-  const { t } = useI18n()
+  const { t, path } = useI18n()
   const e = t.exhibit
   return (
     <PageShell title={t.nav.exhibit} lead={e.lead}>
@@ -34,6 +35,9 @@ export default function Exhibit() {
         <div>
           <h3 className="section-title" style={{ fontSize: 28 }}>{e.formTitle}</h3>
           <p className="lead">{e.formLead}</p>
+          <p className="lead">
+            <DiamondButton to={path('/register')}>{t.nav.register}</DiamondButton>
+          </p>
           <FormBox variant="exhibit" />
         </div>
         <div className="media-frame">
