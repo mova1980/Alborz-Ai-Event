@@ -1,18 +1,19 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useI18n } from '../context/Language'
 import DiamondButton from './DiamondButton'
-import GlobeStage from './GlobeStage'
 import LineArt from './LineArt'
 import ErrorBoundary from './ErrorBoundary'
 import HeroTitle from './HeroTitle'
 
+const GlobeStage = lazy(() => import('./GlobeStage'))
+
 const FX = ['geo', 'ai', 'link']
 
-function GlobeFallback() {
+function GlobeFallback({ src }) {
   return (
     <div className="globe-stage">
       <div className="globe-halo" />
-      <img className="earth-photo earth-spin" src="/images/earth-globe.png" alt="" />
+      <img className="earth-photo earth-spin" src={src || '/images/earth-globe.webp'} alt="" width="900" height="900" decoding="async" fetchPriority="high" />
     </div>
   )
 }
@@ -62,7 +63,7 @@ export default function Hero({ ready }) {
   const [idx, setIdx] = useState(0)
   const [slideIn, setSlideIn] = useState(false)
   const [on, setOn] = useState(false)
-  const count = useCountdown(new Date('2026-10-13T08:30:00+03:30').getTime())
+  const count = useCountdown(new Date(t.countdown.target || '2026-10-13T08:30:00+03:30').getTime())
 
   useEffect(() => {
     if (!ready) return
@@ -84,8 +85,10 @@ export default function Hero({ ready }) {
     <section className={`hero ${on ? 'is-on' : ''}`}>
       <Stars />
       <div className="globe-wrap" id="videoWrapper">
-        <ErrorBoundary fallback={<GlobeFallback />}>
-          <GlobeStage />
+        <ErrorBoundary fallback={<GlobeFallback src={t.media?.earth} />}>
+          <Suspense fallback={<GlobeFallback src={t.media?.earth} />}>
+            <GlobeStage />
+          </Suspense>
         </ErrorBoundary>
         <LineArt className="globe-lines" on={on} />
       </div>

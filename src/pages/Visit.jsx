@@ -24,7 +24,7 @@ export default function Visit() {
           <FormBox variant="visit" />
         </div>
         <div className="media-frame">
-          <img src="/images/zone-summit.jpg" alt="" />
+          <img src={t.media.visit} alt="" width="1280" height="720" loading="lazy" decoding="async" />
         </div>
       </div>
     </PageShell>

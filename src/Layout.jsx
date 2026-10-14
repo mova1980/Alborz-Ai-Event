@@ -66,7 +66,7 @@ export default function Layout() {
 
   return (
     <ReadyCtx.Provider value={ready}>
-      <Preloader done={ready} />
+      <Preloader done={ready} label={t.preloader} />
       <Cursor />
       <div className="noise" aria-hidden="true" />
       <a className="skip" href="#mainContent">{t.skip.content}</a>

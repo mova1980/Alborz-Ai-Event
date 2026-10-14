@@ -13,7 +13,7 @@ export function localizeDigits(value, lang) {
     .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
 }
 
-const SKIP = new Set(['href', 'email', 'lang', 'dir'])
+const SKIP = new Set(['href', 'email', 'lang', 'dir', 'logo', 'target', 'src', 'url', 'id', 'image', 'mercUrl', 'nasrUrl', 'xUrl', 'inUrl'])
 
 export function localizeTree(node, lang, key) {
   if (typeof node === 'string') {

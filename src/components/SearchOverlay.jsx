@@ -8,17 +8,25 @@ export default function SearchOverlay({ open, onClose }) {
   const input = useRef(null)
   const nav = useNavigate()
 
-  const index = useMemo(() => ([
-    { t: t.nav.program, p: '/program' },
-    { t: t.nav.exhibit, p: '/exhibit' },
-    { t: t.nav.visit, p: '/visit' },
-    { t: t.nav.problems, p: '/problems' },
-    { t: t.nav.venue, p: '/venue' },
-    { t: t.nav.register, p: '/register' },
-    { t: t.brand.tagline, p: '/' },
-    { t: t.brand.theme, p: '/problems' },
-    { t: t.hero.ctaBooth, p: '/exhibit' },
-  ]), [t])
+  const index = useMemo(() => {
+    const base = [
+      { t: t.nav.program, p: '/program' },
+      { t: t.nav.exhibit, p: '/exhibit' },
+      { t: t.nav.visit, p: '/visit' },
+      { t: t.nav.problems, p: '/problems' },
+      { t: t.nav.venue, p: '/venue' },
+      { t: t.nav.register, p: '/register' },
+      { t: t.headlines.title, p: '/news' },
+      { t: t.brand.tagline, p: '/' },
+      { t: t.brand.theme, p: '/problems' },
+      { t: t.hero.ctaBooth, p: '/exhibit' },
+    ]
+    ;(t.headlines.items || []).forEach((it, i) => {
+      const id = String(it.id || '').trim() || `n${i + 1}`
+      if (it.title) base.push({ t: it.title, p: `/news/${id}` })
+    })
+    return base
+  }, [t])
 
   const hits = q.trim()
     ? index.filter((i) => i.t.toLowerCase().includes(q.trim().toLowerCase()))

@@ -17,6 +17,23 @@ export function setToken(token, kind = 'user') {
   } catch { /* ignore */ }
 }
 
+function messageOf(data, fallback = 'request_failed') {
+  if (typeof data === 'string' && data.trim()) return data
+  if (!data || typeof data !== 'object') return fallback
+  if (typeof data.message === 'string' && data.message.trim()) return data.message
+  if (typeof data.error === 'string' && data.error.trim()) return data.error
+  if (typeof data.error?.message === 'string') return data.error.message
+  return fallback
+}
+
+export function errorText(ex, fallback = 'خطا در ارتباط با سرور') {
+  if (!ex) return fallback
+  if (typeof ex === 'string') return ex
+  const m = ex.message
+  if (typeof m === 'string' && m && m !== '[object Object]') return m
+  return messageOf(ex.data, fallback)
+}
+
 export async function api(path, { method = 'GET', body, admin = false } = {}) {
   const headers = { Accept: 'application/json' }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
@@ -27,14 +44,15 @@ export async function api(path, { method = 'GET', body, admin = false } = {}) {
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
-  if (r.headers.get('content-type')?.includes('text/csv')) {
+  const ct = r.headers.get('content-type') || ''
+  if (ct.includes('text/csv')) {
     const blob = await r.blob()
     if (!r.ok) throw new Error('export_failed')
     return blob
   }
-  const data = await r.json().catch(() => ({}))
+  const data = ct.includes('json') ? await r.json().catch(() => ({})) : {}
   if (!r.ok) {
-    const err = new Error(data.message || data.error || 'request_failed')
+    const err = new Error(messageOf(data, r.status === 404 ? 'مسیر یافت نشد' : 'request_failed'))
     err.status = r.status
     err.data = data
     throw err

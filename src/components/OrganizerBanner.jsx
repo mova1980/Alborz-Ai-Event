@@ -55,7 +55,7 @@ export default function OrganizerBanner() {
             const active = d === 0
             const media = (
               <div className="org-plate">
-                <img src={org.logo} alt="" />
+                <img src={org.logo} alt="" width="360" height="360" loading="lazy" decoding="async" />
               </div>
             )
             return (

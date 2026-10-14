@@ -19,7 +19,7 @@ export default function Problems() {
       </div>
       <div className="split">
         <div className="media-frame">
-          <img src="/images/problem-wall.jpg" alt="" />
+          <img src={t.media.problems} alt="" width="1280" height="720" loading="lazy" decoding="async" />
         </div>
         <div>
           <h3 className="section-title" style={{ fontSize: 28 }}>{p.formTitle}</h3>

@@ -1,5 +1,4 @@
 import { useContext } from 'react'
-import { Link } from 'react-router-dom'
 import { useI18n } from '../context/Language'
 import { ReadyCtx } from '../Layout'
 import useInView from '../hooks/useInView'
@@ -8,10 +7,11 @@ import DiamondButton from '../components/DiamondButton'
 import LineArt from '../components/LineArt'
 import OrganizerBanner from '../components/OrganizerBanner'
 import Colleagues from '../components/Colleagues'
+import { NewsGrid, newsList } from './News'
 
 export default function Home() {
   const ready = useContext(ReadyCtx)
-  const { t, path, n2 } = useI18n()
+  const { t, path } = useI18n()
   const [hRef, hOn] = useInView('80px')
   const [qRef, qOn] = useInView('80px')
   const [cRef, cOn] = useInView('80px')
@@ -22,29 +22,21 @@ export default function Home() {
       <Hero ready={!!ready} />
 
       <section className={`headlines ${hOn ? 'is-on' : ''}`} ref={hRef} id="headLines">
+        {t.headlines.kicker ? <div className="kicker">{t.headlines.kicker}</div> : null}
         <h2 className="display">{t.headlines.title}</h2>
-        <ul>
-          {t.headlines.items.map((it, i) => (
-            <li key={it.title} style={{ '--stagger': i }}>
-              <Link className="headline-card" to={path(it.href)}>
-                <span className="hc-corners" aria-hidden="true" />
-                <span className="hc-index">{n2(i + 1)}</span>
-                <div className="hc-body">
-                  <div className="itemdate"><span>{it.date}</span></div>
-                  <div className="htitle">{it.title}</div>
-                </div>
-                <span className="hc-go" aria-hidden="true" />
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <NewsGrid items={newsList(t)} limit={4} />
+        {newsList(t).length > 4 ? (
+          <div style={{ marginTop: 28 }}>
+            <DiamondButton to={path('/news')}>{t.headlines.more}</DiamondButton>
+          </div>
+        ) : null}
       </section>
 
       <section className="pull" id="imagePullQuote">
         <div className="pull-row">
           <div className="pull-image">
             <picture>
-              <img src="/images/connection-lab.jpg" alt="" />
+              <img src={t.media.pull} alt="" width="1280" height="720" loading="lazy" decoding="async" />
             </picture>
           </div>
           <div className="pull-content">
@@ -58,6 +50,20 @@ export default function Home() {
         <LineArt on={qOn} />
         <div className="quote-text display">“{t.quote.text}”</div>
         <div className="quote-attr">{t.quote.attr}</div>
+      </section>
+
+      <section className="home-poster" id="officialPoster">
+        <div className="kicker">{t.homePoster?.kicker || t.program.posterCaption}</div>
+        <figure className="poster-stage">
+          <span className="poster-corners" aria-hidden="true" />
+          <div className="poster-plate">
+            <img src={t.media.poster} alt={t.program.posterAlt} width="1100" height="1556" loading="lazy" decoding="async" />
+          </div>
+          <figcaption>{t.program.posterCaption}</figcaption>
+        </figure>
+        <div className="home-poster-cta">
+          <DiamondButton to={path('/program')}>{t.program.more}</DiamondButton>
+        </div>
       </section>
 
       <section className="stats">

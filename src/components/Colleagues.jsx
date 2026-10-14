@@ -13,7 +13,7 @@ export default function Colleagues() {
           <li key={c.id} style={{ '--i': i }} title={c.name}>
             <article className="col-item">
               <span className="col-mark" aria-hidden="true">
-                <img src={c.logo} alt="" />
+                <img src={c.logo} alt="" width="88" height="66" loading="lazy" decoding="async" />
               </span>
               <strong>{c.short || c.name}</strong>
             </article>

@@ -41,7 +41,7 @@ export default function Exhibit() {
           <FormBox variant="exhibit" />
         </div>
         <div className="media-frame">
-          <img src="/images/zone-exhibition.jpg" alt="" />
+          <img src={t.media.exhibit} alt="" width="1280" height="720" loading="lazy" decoding="async" />
         </div>
       </div>
     </PageShell>

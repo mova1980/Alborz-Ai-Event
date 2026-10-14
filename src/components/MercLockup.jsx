@@ -1,20 +1,23 @@
+import { useI18n } from '../context/Language'
+
 export default function MercLockup({ compact = false }) {
+  const { t } = useI18n()
   return (
     <a
       className={`merc-lockup${compact ? ' is-compact' : ''}`}
-      href="https://www.merc.ac.ir"
+      href={t.brand.mercUrl || 'https://www.merc.ac.ir'}
       target="_blank"
       rel="noreferrer"
-      title="پژوهشگاه مواد و انرژی"
+      title={t.brand.host}
     >
       <img
         className="merc-full"
-        src="/images/logo-merc.png"
-        alt="پژوهشگاه مواد و انرژی — وزارت علوم، تحقیقات و فناوری"
+        src={t.media?.logoMerc || '/images/logo-merc.png'}
+        alt={t.brand.host}
       />
       <img
         className="merc-emblem"
-        src="/images/logo-merc-emblem.png"
+        src={t.media?.logoMercEmblem || '/images/logo-merc-emblem.png'}
         alt=""
         aria-hidden="true"
       />

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import '../../styles/admin.css'
-import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
-import { api, getToken, setToken } from '../../lib/api'
+import { Link, NavLink, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
+import ContentStudio from './ContentStudio'
+import { api, errorText, getToken, setToken } from '../../lib/api'
 
 const STATUSES = ['submitted', 'reviewing', 'approved', 'waitlist', 'rejected', 'checked_in']
 const ST_FA = {
@@ -54,7 +55,7 @@ function Login({ onOk }) {
       setToken(out.token, 'admin')
       onOk({ role: out.role, user: out.user })
     } catch (ex) {
-      setErr(ex.message)
+      setErr(errorText(ex, 'ورود ناموفق بود.'))
     } finally {
       setBusy(false)
     }
@@ -76,18 +77,20 @@ function Login({ onOk }) {
 
 function Shell({ me, onOut, children }) {
   const nav = [
-    ['/', 'نمای کلی'],
-    ['/registrations', 'ثبت‌نام‌ها'],
-    ['/messages', 'پیام‌ها'],
+    ['/admin', 'نمای کلی', false],
+    ['/admin/content', 'محتوای سایت', true],
+    ['/admin/media', 'تصاویر و لوگو', true],
+    ['/admin/registrations', 'ثبت‌نام‌ها', false],
+    ['/admin/messages', 'پیام‌ها', false],
+    ['/admin/settings', 'تنظیمات', true],
   ]
-  if (me.role === 'admin') nav.push(['/settings', 'تنظیمات'])
   return (
     <div className="ad-shell" dir="rtl">
       <aside className="ad-side">
         <div className="ad-brand">ATW <span>Admin</span></div>
         <nav>
-          {nav.map(([p, l]) => (
-            <Link key={p} to={`/admin${p === '/' ? '' : p}`}>{l}</Link>
+          {nav.filter(([, , adminOnly]) => !adminOnly || me.role === 'admin').map(([p, l]) => (
+            <NavLink key={p} to={p} end={p === '/admin'} className={({ isActive }) => (isActive ? 'is-on' : undefined)}>{l}</NavLink>
           ))}
         </nav>
         <div className="ad-user">
@@ -122,8 +125,9 @@ function Overview() {
         ))}
       </ul>
       {d.persistence === 'ephemeral' && (
-        <div className="form-error">ذخیره روی Vercel بدون DATABASE_URL موقت است. Neon Postgres را در Environment Variables اضافه کنید.</div>
+        <div className="form-error">داده روی Vercel بدون Supabase موقت است. SUPABASE_URL و SUPABASE_SERVICE_ROLE_KEY را در Environment Variables بگذارید — فایل SUPABASE.md.</div>
       )}
+      <p className="muted" style={{ marginTop: 24 }}>متن‌ها، تصاویر، لوگوها و همکاران از منوی «محتوای سایت» و «تصاویر و لوگو» ویرایش می‌شوند. قالب صفحات عوض نمی‌شود.</p>
     </>
   )
 }
@@ -290,7 +294,11 @@ function Settings() {
   }, [])
   async function save(e) {
     e.preventDefault()
-    const out = await api('/admin/content', { method: 'PUT', admin: true, body: c })
+    const out = await api('/admin/content', {
+      method: 'PUT',
+      admin: true,
+      body: { registrationOpen: c.registrationOpen, noticeFa: c.noticeFa, noticeEn: c.noticeEn },
+    })
     setC(out.content)
     setOk('ذخیره شد.')
   }
@@ -309,17 +317,16 @@ function Settings() {
         {ok ? <p>{ok}</p> : null}
       </form>
       <section className="ad-card sms-help">
-        <h2>اتصال پیامک</h2>
-        <p>کلید API را در Vercel → Settings → Environment Variables وارد کنید، سپس Redeploy.</p>
+        <h2>Supabase و پیامک</h2>
+        <p>متغیرها را در Vercel → Settings → Environment Variables بگذارید، سپس Redeploy.</p>
         <ul>
+          <li><code>SUPABASE_URL</code> آدرس پروژه (https://xxxx.supabase.co)</li>
+          <li><code>SUPABASE_SERVICE_ROLE_KEY</code> کلید service_role (مخفی)</li>
+          <li><code>JWT_SECRET</code> رشته تصادفی بلند</li>
           <li><code>SMS_PROVIDER</code> = kavenegar | smsir | melipayamak | ghasedak | webhook</li>
-          <li><code>SMS_API_KEY</code> کلید کاوه‌نگار / sms.ir / قاصدک</li>
-          <li><code>SMS_OTP_TEMPLATE</code> نام پترن OTP (کاوه‌نگار)</li>
-          <li><code>SMS_SENDER</code> شماره خط</li>
-          <li><code>DATABASE_URL</code> رشته اتصال Neon/Postgres برای ماندگاری داده</li>
-          <li><code>JWT_SECRET</code> و در صورت نیاز <code>ADMIN_PASS</code></li>
+          <li><code>SMS_API_KEY</code> و در کاوه‌نگار <code>SMS_OTP_TEMPLATE</code></li>
         </ul>
-        <p>فایل کامل: <code>SMS-SETUP.md</code> در ریشه پروژه.</p>
+        <p>راهنما: <code>SUPABASE.md</code> و <code>SMS-SETUP.md</code></p>
       </section>
     </>
   )
@@ -347,6 +354,8 @@ export default function AdminApp() {
         <Route path="registrations" element={<Registrations />} />
         <Route path="registrations/:id" element={<RegistrationDetail />} />
         <Route path="messages" element={<Messages />} />
+        <Route path="content" element={<Guard me={me} role="admin"><ContentStudio tab="text" /></Guard>} />
+        <Route path="media" element={<Guard me={me} role="admin"><ContentStudio tab="media" /></Guard>} />
         <Route path="settings" element={<Guard me={me} role="admin"><Settings /></Guard>} />
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Routes>

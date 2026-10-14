@@ -1,15 +1,36 @@
-import { createContext, useContext, useEffect, useMemo } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import fa from '../i18n/fa'
 import en from '../i18n/en'
 import { localizeDigits, localizeTree, pad2 } from '../lib/digits'
+import { deepMerge, DEFAULT_MEDIA } from '../lib/cms'
 
 const Ctx = createContext(null)
 
 export function LanguageProvider({ children }) {
   const { pathname } = useLocation()
   const isEn = pathname === '/en' || pathname.startsWith('/en/')
-  const raw = isEn ? en : fa
+  const [overlay, setOverlay] = useState(null)
+
+  useEffect(() => {
+    let stop = false
+    fetch('/api/content')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!stop && d?.content) setOverlay(d.content)
+      })
+      .catch(() => {})
+    return () => { stop = true }
+  }, [])
+
+  const bundled = isEn ? en : fa
+  const raw = useMemo(() => {
+    const over = overlay?.[isEn ? 'en' : 'fa']
+    const merged = over ? deepMerge(bundled, over) : bundled
+    const images = { ...DEFAULT_MEDIA, ...(overlay?.images || {}) }
+    return { ...merged, media: images }
+  }, [bundled, overlay, isEn])
+
   const t = useMemo(() => localizeTree(raw, raw.lang), [raw])
   const base = isEn ? '/en' : ''
 
@@ -17,6 +38,8 @@ export function LanguageProvider({ children }) {
     document.documentElement.lang = t.lang
     document.documentElement.dir = t.dir
     document.title = t.meta.title
+    const og = document.querySelector('meta[property="og:image"]')
+    if (og && t.media?.og) og.setAttribute('content', t.media.og)
   }, [t])
 
   const value = useMemo(() => {
@@ -41,7 +64,7 @@ export function useI18n() {
   const ctx = useContext(Ctx)
   if (!ctx) {
     return {
-      t: fa,
+      t: { ...fa, media: DEFAULT_MEDIA },
       isEn: false,
       base: '',
       path: (p) => p || '/',

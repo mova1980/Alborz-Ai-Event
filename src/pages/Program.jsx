@@ -5,6 +5,13 @@ export default function Program() {
   const { t } = useI18n()
   return (
     <PageShell title={t.nav.program} lead={t.program.pageLead}>
+      <figure className="poster-stage">
+        <span className="poster-corners" aria-hidden="true" />
+        <div className="poster-plate">
+          <img src={t.media.poster} alt={t.program.posterAlt} width="1100" height="1556" decoding="async" />
+        </div>
+        <figcaption>{t.program.posterCaption}</figcaption>
+      </figure>
       {t.program.days.map((d) => (
         <section className="day-full" key={d.day}>
           <header>

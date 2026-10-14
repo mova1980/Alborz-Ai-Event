@@ -9,8 +9,8 @@ export default function Footer() {
     <footer className="footer" id="footer">
       <div className="footer-top">
         <div className="social" id="footerSocial">
-          {['X', 'in'].map((n) => (
-            <a key={n} href="#" aria-label={n}>
+          {[['X', t.footer.xUrl], ['in', t.footer.inUrl]].map(([n, href]) => (
+            <a key={n} href={href || '#'} aria-label={n}>
               <svg viewBox="0 0 58 39">
                 <polygon points="1.5 37.4 19.7 1 56.3 1 38.1 37.4" />
                 <text x="29" y="24" textAnchor="middle" className="inn" fill="#fff" fontSize="11" fontFamily="Outfit, sans-serif">{n}</text>
@@ -21,8 +21,8 @@ export default function Footer() {
         <div className="footer-phone"><a href="tel:+982636201888">{t.footer.phone}</a></div>
         <ul className="footer-offices">
           <li><Link to={path('/venue')}>{t.brand.host}</Link></li>
-          <li>Karaj</li>
-          <li>Alborz</li>
+          <li>{t.footer.city}</li>
+          <li>{t.footer.region}</li>
         </ul>
       </div>
       <div className="footer-bottom">

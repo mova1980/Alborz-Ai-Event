@@ -10,7 +10,7 @@ export default function Venue() {
       <h2 className="section-title" style={{ marginTop: 0 }}>{v.title}</h2>
       <div className="split">
         <div className="media-frame">
-          <img src="/images/venue-merc.jpg" alt="" />
+          <img src={t.media.venue} alt="" width="1280" height="720" loading="lazy" decoding="async" />
         </div>
         <div>
           {v.facts.map((f) => (
@@ -25,7 +25,7 @@ export default function Venue() {
         <h3 className="section-title" style={{ fontSize: 28 }}>{v.roleTitle}</h3>
         <p className="lead">{v.role}</p>
         <div className="media-frame" style={{ maxWidth: 920, marginTop: 24 }}>
-          <img src="/images/live-lab.jpg" alt="" />
+          <img src={t.media.venueLab} alt="" loading="lazy" decoding="async" />
         </div>
       </div>
     </PageShell>
