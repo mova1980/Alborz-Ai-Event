@@ -31,6 +31,18 @@ function localApi() {
 export default defineConfig({
   plugins: [react(), localApi()],
   appType: 'spa',
+  build: {
+    target: 'es2020',
+    cssCodeSplit: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/three')) return 'three'
+          if (id.includes('node_modules/lenis')) return 'lenis'
+        },
+      },
+    },
+  },
   server: {
     host: '0.0.0.0',
     port: 5173,

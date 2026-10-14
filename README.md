@@ -114,4 +114,6 @@ location / {
 
 کاربران پنل: `admin` / `Digitex@123456` (کامل) و `supervisor` / `123456` (ثبت‌نام و پیام‌ها).
 
-پیامک و دیتابیس: فایل‌های `.env.example` و `SMS-SETUP.md`. روی Vercel حتماً `DATABASE_URL` (Neon) و کلید SMS را در Environment Variables بگذارید و Redeploy کنید. بدون `DATABASE_URL` داده روی سرورلس Vercel ماندگار نیست.
+دیتابیس: **Supabase** — فایل `SUPABASE.md`. روی Vercel متغیرهای `SUPABASE_URL` و `SUPABASE_SERVICE_ROLE_KEY` را بگذارید و Redeploy کنید.
+
+پیامک: `SMS-SETUP.md`.
