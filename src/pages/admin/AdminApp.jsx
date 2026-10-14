@@ -28,7 +28,7 @@ function useAdmin() {
         return
       }
       try {
-        const out = await api('/auth/me', { admin: true })
+        const out = await api('/me', { admin: true })
         if (!stop) setMe(out.role === 'admin' || out.role === 'supervisor' ? out : null)
       } catch {
         setToken('', 'admin')
@@ -51,7 +51,7 @@ function Login({ onOk }) {
     setBusy(true)
     setErr('')
     try {
-      const out = await api('/auth/admin', { method: 'POST', body: { user, pass } })
+      const out = await api('/login', { method: 'POST', body: { user, pass } })
       setToken(out.token, 'admin')
       onOk({ role: out.role, user: out.user })
     } catch (ex) {
