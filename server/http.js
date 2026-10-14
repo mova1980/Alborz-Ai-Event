@@ -42,6 +42,14 @@ export function pathnameOf(req) {
   }
 }
 
+export function sendBinary(res, { mime, buf, cache = 'public, max-age=86400' }) {
+  res.statusCode = 200
+  res.setHeader('Content-Type', mime || 'application/octet-stream')
+  res.setHeader('Cache-Control', cache)
+  res.setHeader('Content-Length', buf.length)
+  res.end(buf)
+}
+
 export function publicOrigin(req) {
   if (process.env.PUBLIC_URL) return process.env.PUBLIC_URL.replace(/\/$/, '')
   const host = req.headers['x-forwarded-host'] || req.headers.host || 'www.alborz-digitex.ir'

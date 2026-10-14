@@ -1,13 +1,46 @@
 import './env.js'
-import { json, readBody, bearer, pathnameOf, publicOrigin } from './http.js'
+import { json, readBody, bearer, pathnameOf, publicOrigin, sendBinary } from './http.js'
 import { load, mutate, persistenceKind, getRegByCode, getRegById } from './store.js'
 import {
   normalizeMobile, isIranMobile, signToken, verifyToken, otpCode, hashOtp,
   checkAdmin, newId, trackingCode,
 } from './auth.js'
+import faDefaults from '../src/i18n/fa.js'
+import enDefaults from '../src/i18n/en.js'
+import { DEFAULT_MEDIA } from '../src/lib/cms.js'
 import { sendOtp, smsConfigured } from './sms.js'
 import { makeQr, statusUrl } from './qr.js'
 import { IS_PROD } from './env.js'
+
+const ALLOWED_IMG = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'])
+
+function publicContent(c = {}) {
+  return {
+    registrationOpen: c.registrationOpen !== false,
+    noticeFa: c.noticeFa || '',
+    noticeEn: c.noticeEn || '',
+    fa: c.fa || null,
+    en: c.en || null,
+    images: c.images || {},
+    updatedAt: c.updatedAt || 0,
+  }
+}
+
+function mediaItem(m) {
+  return { id: m.id, name: m.name, mime: m.mime, size: m.size || 0, createdAt: m.createdAt, url: `/api/media/${m.id}` }
+}
+
+function parseImage(body) {
+  const raw = String(body.data || '')
+  const m = raw.match(/^data:([^;]+);base64,(.+)$/)
+  const mime = String(body.mime || m?.[1] || '').toLowerCase()
+  const b64 = m ? m[2] : raw
+  if (!ALLOWED_IMG.has(mime)) return { error: 'نوع فایل مجاز نیست.' }
+  const buf = Buffer.from(b64, 'base64')
+  if (!buf.length) return { error: 'فایل خالی است.' }
+  if (buf.length > 1_800_000) return { error: 'حجم تصویر حداکثر ۱٫۸ مگابایت است.' }
+  return { mime, buf, b64: buf.toString('base64') }
+}
 
 const OTP_TTL = 120_000
 const OTP_RESEND = 90_000
@@ -63,7 +96,16 @@ export async function handleApi(req, res) {
 
     if (path === '/content' && method === 'GET') {
       const data = await load()
-      return json(res, 200, { content: data.content || {} })
+      return json(res, 200, { content: publicContent(data.content || {}) })
+    }
+
+    if (path.startsWith('/media/') && method === 'GET') {
+      const id = decodeURIComponent(path.slice('/media/'.length)).replace(/[^a-zA-Z0-9_-]/g, '')
+      const data = await load()
+      const meta = (data.media || []).find((m) => m.id === id)
+      const b64 = data.mediaBlobs?.[id]
+      if (!meta || !b64) return json(res, 404, { error: 'not_found' })
+      return sendBinary(res, { mime: meta.mime, buf: Buffer.from(b64, 'base64') })
     }
 
     /* ---------- OTP ---------- */
@@ -345,21 +387,70 @@ export async function handleApi(req, res) {
       if (path === '/admin/content' && method === 'GET') {
         if (!isAdmin) return json(res, 403, { error: 'forbidden' })
         const d = await load()
-        return json(res, 200, { content: d.content, persistence: persistenceKind(), sms: smsConfigured() })
+        return json(res, 200, {
+          content: publicContent(d.content),
+          defaults: { fa: faDefaults, en: enDefaults, images: DEFAULT_MEDIA },
+          media: (d.media || []).map(mediaItem),
+          persistence: persistenceKind(),
+          sms: smsConfigured(),
+        })
       }
 
       if (path === '/admin/content' && method === 'PUT') {
         if (!isAdmin) return json(res, 403, { error: 'forbidden' })
         const b = await readBody(req)
         const content = await mutate((d) => {
-          d.content = {
-            registrationOpen: b.registrationOpen !== false,
-            noticeFa: String(b.noticeFa || ''),
-            noticeEn: String(b.noticeEn || ''),
-          }
-          return d.content
+          const prev = d.content || {}
+          const next = { ...prev }
+          if ('registrationOpen' in b) next.registrationOpen = b.registrationOpen !== false
+          if ('noticeFa' in b) next.noticeFa = String(b.noticeFa || '')
+          if ('noticeEn' in b) next.noticeEn = String(b.noticeEn || '')
+          if (b.fa && typeof b.fa === 'object') next.fa = b.fa
+          if (b.en && typeof b.en === 'object') next.en = b.en
+          if (b.images && typeof b.images === 'object') next.images = b.images
+          next.updatedAt = Date.now()
+          d.content = next
+          return next
         })
-        return json(res, 200, { content })
+        return json(res, 200, { content: publicContent(content) })
+      }
+
+      if (path === '/admin/media' && method === 'GET') {
+        if (!isAdmin) return json(res, 403, { error: 'forbidden' })
+        const d = await load()
+        return json(res, 200, { items: (d.media || []).map(mediaItem) })
+      }
+
+      if (path === '/admin/media' && method === 'POST') {
+        if (!isAdmin) return json(res, 403, { error: 'forbidden' })
+        const b = await readBody(req)
+        const parsed = parseImage(b)
+        if (parsed.error) return json(res, 400, { error: 'invalid', message: parsed.error })
+        const item = await mutate((d) => {
+          if (!d.media) d.media = []
+          if (!d.mediaBlobs) d.mediaBlobs = {}
+          const rec = {
+            id: newId('img'),
+            name: String(b.name || 'image').slice(0, 120),
+            mime: parsed.mime,
+            size: parsed.buf.length,
+            createdAt: Date.now(),
+          }
+          d.media.unshift(rec)
+          d.mediaBlobs[rec.id] = parsed.b64
+          return rec
+        })
+        return json(res, 201, { item: mediaItem(item) })
+      }
+
+      if (path.startsWith('/admin/media/') && method === 'DELETE') {
+        if (!isAdmin) return json(res, 403, { error: 'forbidden' })
+        const id = path.slice('/admin/media/'.length).replace(/[^a-zA-Z0-9_-]/g, '')
+        await mutate((d) => {
+          d.media = (d.media || []).filter((m) => m.id !== id)
+          if (d.mediaBlobs) delete d.mediaBlobs[id]
+        })
+        return json(res, 200, { ok: true })
       }
 
       if (path === '/admin/export' && method === 'GET') {
