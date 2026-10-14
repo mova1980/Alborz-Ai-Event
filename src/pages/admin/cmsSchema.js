@@ -110,7 +110,7 @@ export const SECTIONS = [
       {
         title: 'شمارش معکوس',
         fields: [
-          { path: 'countdown.target', label: 'زمان گشایش (ISO)', kind: 'text', shared: true, hint: 'مثال: 2026-10-13T08:30:00+03:30' },
+          { path: 'countdown.target', label: 'زمان گشایش (ISO)', kind: 'text', shared: true, hint: 'مثال: 2026-10-20T09:00:00+03:30' },
           { path: 'countdown.label', label: 'برچسب', kind: 'text' },
           { path: 'countdown.days', label: 'روز', kind: 'text' },
           { path: 'countdown.hours', label: 'ساعت', kind: 'text' },
@@ -227,6 +227,10 @@ export const SECTIONS = [
           { path: 'program.posterAlt', label: 'متن جایگزین پوستر', kind: 'text' },
           { path: 'program.posterCaption', label: 'زیرنویس پوستر', kind: 'text' },
           { path: 'program.expand', label: 'متن پایانی صفحه برنامه', kind: 'area' },
+          { path: 'program.hallTime', label: 'ستون ساعت', kind: 'text' },
+          { path: 'program.hallA', label: 'کلاس A', kind: 'text' },
+          { path: 'program.hallB', label: 'کلاس B', kind: 'text' },
+          { path: 'program.hallC', label: 'کلاس C', kind: 'text' },
         ],
       },
       {
@@ -237,7 +241,7 @@ export const SECTIONS = [
             kind: 'list',
             itemLabel: 'روز',
             min: 1,
-            template: { day: '', date: '', title: '', sub: '', items: [{ t: '', d: '' }] },
+            template: { day: '', date: '', title: '', sub: '', items: [{ t: '', d: '' }], slots: [{ t: '', a: '', b: '', c: '', all: '' }] },
             fields: [
               { path: 'day', label: 'روز', kind: 'text' },
               { path: 'date', label: 'تاریخ', kind: 'text' },
@@ -246,11 +250,24 @@ export const SECTIONS = [
               {
                 path: 'items',
                 kind: 'list',
-                itemLabel: 'آیتم',
+                itemLabel: 'خلاصه خانه',
                 template: { t: '', d: '' },
                 fields: [
                   { path: 't', label: 'زمان', kind: 'text' },
                   { path: 'd', label: 'شرح', kind: 'area' },
+                ],
+              },
+              {
+                path: 'slots',
+                kind: 'list',
+                itemLabel: 'سطر کارگاه',
+                template: { t: '', a: '', b: '', c: '', all: '' },
+                fields: [
+                  { path: 't', label: 'ساعت', kind: 'text' },
+                  { path: 'all', label: 'سالن مشترک (افتتاحیه)', kind: 'area' },
+                  { path: 'a', label: 'کلاس A', kind: 'area' },
+                  { path: 'b', label: 'کلاس B', kind: 'area' },
+                  { path: 'c', label: 'کلاس C', kind: 'area' },
                 ],
               },
             ],
