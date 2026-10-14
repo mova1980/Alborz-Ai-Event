@@ -63,7 +63,7 @@ export default function Hero({ ready }) {
   const [idx, setIdx] = useState(0)
   const [slideIn, setSlideIn] = useState(false)
   const [on, setOn] = useState(false)
-  const count = useCountdown(new Date(t.countdown.target || '2026-10-13T08:30:00+03:30').getTime())
+  const count = useCountdown(new Date(t.countdown.target || '2026-10-20T09:00:00+03:30').getTime())
 
   useEffect(() => {
     if (!ready) return
