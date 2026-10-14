@@ -34,7 +34,7 @@ export default function Status() {
     setErr('')
     setBusy(true)
     try {
-      const out = await api('/status/lookup', { method: 'POST', body: { code, mobile } })
+      const out = await api('/status-lookup', { method: 'POST', body: { code, mobile } })
       setRow(out.registration)
     } catch (ex) {
       setErr(ex.message)

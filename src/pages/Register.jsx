@@ -42,7 +42,7 @@ export default function Register() {
         return
       }
       try {
-        const me = await api('/auth/me')
+        const me = await api('/me')
         if (stop) return
         if (me.role !== 'company') {
           setToken('', 'user')
@@ -75,7 +75,7 @@ export default function Register() {
     setErr('')
     setBusy(true)
     try {
-      const out = await api('/auth/otp/request', { method: 'POST', body: { mobile } })
+      const out = await api('/otp-request', { method: 'POST', body: { mobile } })
       setMobile(out.mobile)
       setWait(out.wait || 90)
       if (out.devCode) setCode(out.devCode)
@@ -93,7 +93,7 @@ export default function Register() {
     setErr('')
     setBusy(true)
     try {
-      const out = await api('/auth/otp/verify', { method: 'POST', body: { mobile, code } })
+      const out = await api('/otp-verify', { method: 'POST', body: { mobile, code } })
       setToken(out.token, 'user')
       setMine(out.registrations || [])
       setStep('form')
