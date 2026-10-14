@@ -50,9 +50,16 @@ export async function api(path, { method = 'GET', body, admin = false } = {}) {
     if (!r.ok) throw new Error('export_failed')
     return blob
   }
-  const data = ct.includes('json') ? await r.json().catch(() => ({})) : {}
+  let data = {}
+  if (ct.includes('json')) {
+    data = await r.json().catch(() => ({}))
+  } else {
+    const text = await r.text().catch(() => '')
+    const line = String(text).split('\n')[0].trim()
+    if (line) data = { message: line }
+  }
   if (!r.ok) {
-    const err = new Error(messageOf(data, r.status === 404 ? 'مسیر یافت نشد' : 'request_failed'))
+    const err = new Error(messageOf(data, r.status === 404 ? 'مسیر API پیدا نشد. بعد از دیپلوی دوباره تلاش کنید.' : 'request_failed'))
     err.status = r.status
     err.data = data
     throw err
