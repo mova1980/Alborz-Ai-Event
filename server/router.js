@@ -77,6 +77,19 @@ export async function handleApi(req, res) {
     const url = pathnameOf(req)
     let path = url.pathname.replace(/^\/api/, '') || '/'
     if (!path.startsWith('/')) path = `/${path}`
+    const orig = String(req.headers['x-forwarded-uri'] || '').split('?')[0]
+    if (orig.startsWith('/api/') && !orig.includes('[')) {
+      path = orig.replace(/^\/api/, '') || path
+      if (!path.startsWith('/')) path = `/${path}`
+    }
+    const aliases = {
+      '/login': '/auth/admin',
+      '/me': '/auth/me',
+      '/otp-request': '/auth/otp/request',
+      '/otp-verify': '/auth/otp/verify',
+      '/status-lookup': '/status/lookup',
+    }
+    if (aliases[path]) path = aliases[path]
     const method = (req.method || 'GET').toUpperCase()
 
     if (method === 'OPTIONS') {
