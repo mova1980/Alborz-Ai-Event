@@ -55,6 +55,7 @@ export const SECTIONS = [
           { path: 'nav.problems', label: 'مسائل', kind: 'text' },
           { path: 'nav.venue', label: 'مکان', kind: 'text' },
           { path: 'nav.register', label: 'ثبت‌نام', kind: 'text' },
+          { path: 'nav.secretariat', label: 'دبیرخانه', kind: 'text' },
           { path: 'nav.search', label: 'جستجو', kind: 'text' },
           { path: 'nav.menu', label: 'منو', kind: 'text' },
           { path: 'nav.close', label: 'بستن', kind: 'text' },

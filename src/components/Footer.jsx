@@ -20,6 +20,7 @@ export default function Footer() {
         </div>
         <div className="footer-phone"><a href="tel:+982636201888">{t.footer.phone}</a></div>
         <ul className="footer-offices">
+          <li><Link to={path('/secretariat')}>{t.nav.secretariat}</Link></li>
           <li><Link to={path('/venue')}>{t.brand.host}</Link></li>
           <li>{t.footer.city}</li>
           <li>{t.footer.region}</li>

@@ -45,7 +45,18 @@ export async function api(path, { method = 'GET', body, admin = false } = {}) {
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
   const ct = r.headers.get('content-type') || ''
-  if (ct.includes('text/csv')) {
+  const disp = r.headers.get('content-disposition') || ''
+  if (
+    disp.includes('attachment')
+    || ct.includes('text/csv')
+    || ct.includes('excel')
+    || ct.includes('spreadsheet')
+    || ct.includes('application/pdf')
+    || ct.includes('octet-stream')
+    || ct.startsWith('image/')
+    || ct.includes('msword')
+    || ct.includes('officedocument')
+  ) {
     const blob = await r.blob()
     if (!r.ok) throw new Error('export_failed')
     return blob

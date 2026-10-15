@@ -10,6 +10,7 @@ const ITEMS = [
   ['visit', '/visit'],
   ['problems', '/problems'],
   ['register', '/register'],
+  ['secretariat', '/secretariat'],
   ['venue', '/venue'],
 ]
 

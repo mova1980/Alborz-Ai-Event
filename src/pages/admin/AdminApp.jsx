@@ -81,6 +81,7 @@ function Shell({ me, onOut, children }) {
     ['/admin/content', 'محتوای سایت', true],
     ['/admin/media', 'تصاویر و لوگو', true],
     ['/admin/registrations', 'ثبت‌نام‌ها', false],
+    ['/admin/secretariat', 'دبیرخانه', false],
     ['/admin/messages', 'پیام‌ها', false],
     ['/admin/settings', 'تنظیمات', true],
   ]
@@ -104,6 +105,35 @@ function Shell({ me, onOut, children }) {
   )
 }
 
+function Bars({ items }) {
+  const max = Math.max(1, ...items.map((i) => i.n))
+  return (
+    <ul className="ad-bars">
+      {items.map((i) => (
+        <li key={i.l}>
+          <span>{i.l}</span>
+          <div><b style={{ width: `${(i.n / max) * 100}%` }} /><em>{i.n}</em></div>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+async function download(path, filename) {
+  const blob = await api(path, { admin: true })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = filename
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000)
+}
+
+async function openPrint(path) {
+  const blob = await api(path, { admin: true })
+  const url = URL.createObjectURL(blob)
+  window.open(url, '_blank', 'noopener')
+}
+
 function Overview() {
   const [d, setD] = useState(null)
   useEffect(() => { api('/admin/overview', { admin: true }).then(setD).catch(() => {}) }, [])
@@ -113,21 +143,25 @@ function Overview() {
     <>
       <h1>نمای کلی</h1>
       <div className="ad-stats">
-        <article><b>{c.registrations}</b><span>ثبت‌نام شرکت</span></article>
-        <article><b>{c.messages}</b><span>پیام</span></article>
-        <article><b>{c.unread}</b><span>پیام خوانده‌نشده</span></article>
-        <article><b>{d.sms ? 'فعال' : 'خاموش'}</b><span>پیامک</span></article>
+        <article><b>{c.registrations}</b><span>ثبت‌نام</span></article>
+        <article><b>{c.checkedIn || 0}</b><span>ورود به میدان</span></article>
+        <article><b>{c.secretariat || 0}</b><span>دبیرخانه</span></article>
+        <article><b>{c.secretariatNew || 0}</b><span>نامه جدید</span></article>
       </div>
-      <h2>وضعیت ثبت‌نام‌ها</h2>
-      <ul className="ad-pills">
-        {STATUSES.map((s) => (
-          <li key={s}><em>{ST_FA[s]}</em> {c.byStatus?.[s] || 0}</li>
-        ))}
-      </ul>
+      <div className="ad-charts">
+        <section className="ad-card">
+          <h2>وضعیت ثبت‌نام‌ها</h2>
+          <Bars items={STATUSES.map((s) => ({ l: ST_FA[s], n: c.byStatus?.[s] || 0 }))} />
+        </section>
+        <section className="ad-card">
+          <h2>ثبت روزانه</h2>
+          <Bars items={(c.byDay || []).map((x) => ({ l: x.d.slice(5), n: x.n }))} />
+        </section>
+      </div>
       {d.persistence === 'ephemeral' && (
         <div className="form-error">داده روی Vercel بدون Supabase موقت است. SUPABASE_URL و SUPABASE_SERVICE_ROLE_KEY را در Environment Variables بگذارید — فایل SUPABASE.md.</div>
       )}
-      <p className="muted" style={{ marginTop: 24 }}>متن‌ها، تصاویر، لوگوها و همکاران از منوی «محتوای سایت» و «تصاویر و لوگو» ویرایش می‌شوند. قالب صفحات عوض نمی‌شود.</p>
+      <p className="muted" style={{ marginTop: 24 }}>خروجی اکسل و PDF از صفحات ثبت‌نام و دبیرخانه. قالب سایت عوض نمی‌شود.</p>
     </>
   )
 }
@@ -136,6 +170,8 @@ function Registrations() {
   const [items, setItems] = useState([])
   const [q, setQ] = useState('')
   const [st, setSt] = useState('')
+  const [scan, setScan] = useState('')
+  const [scanMsg, setScanMsg] = useState('')
   const nav = useNavigate()
   async function load() {
     const qs = new URLSearchParams()
@@ -145,21 +181,35 @@ function Registrations() {
     setItems(out.items || [])
   }
   useEffect(() => { load().catch(() => {}) }, [])
-  async function exp() {
-    const blob = await api('/admin/export', { admin: true })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = 'atw-registrations.csv'
-    a.click()
+  async function checkin(e) {
+    e.preventDefault()
+    setScanMsg('')
+    try {
+      const out = await api('/admin/checkin', { method: 'POST', admin: true, body: { code: scan } })
+      setScanMsg(out.already ? 'قبلاً وارد شده است.' : 'ورود ثبت شد.')
+      setScan('')
+      load()
+    } catch (ex) {
+      setScanMsg(errorText(ex, 'کد یافت نشد.'))
+    }
   }
   return (
     <>
       <div className="ad-head">
-        <h1>ثبت‌نام شرکت‌ها</h1>
-        <button className="ad-btn ghost" type="button" onClick={exp}>خروجی CSV</button>
+        <h1>ثبت‌نام‌ها</h1>
+        <div className="ad-export">
+          <button className="ad-btn ghost" type="button" onClick={() => download('/admin/export.xls', 'atw-registrations.xls')}>Excel</button>
+          <button className="ad-btn ghost" type="button" onClick={() => openPrint('/admin/export.pdf')}>PDF</button>
+          <button className="ad-btn ghost" type="button" onClick={() => download('/admin/export.csv', 'atw-registrations.csv')}>CSV</button>
+        </div>
       </div>
+      <form className="ad-filters" onSubmit={checkin}>
+        <input placeholder="اسکن / ورود کد QR" value={scan} onChange={(e) => setScan(e.target.value)} />
+        <button className="ad-btn" type="submit">ثبت ورود</button>
+        {scanMsg ? <span className="muted">{scanMsg}</span> : null}
+      </form>
       <div className="ad-filters">
-        <input placeholder="جستجو کد، شرکت، موبایل" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input placeholder="جستجو کد، نام، کد ملی، موبایل" value={q} onChange={(e) => setQ(e.target.value)} />
         <select value={st} onChange={(e) => setSt(e.target.value)}>
           <option value="">همه وضعیت‌ها</option>
           {STATUSES.map((s) => <option key={s} value={s}>{ST_FA[s]}</option>)}
@@ -170,17 +220,18 @@ function Registrations() {
         <table className="ad-table">
           <thead>
             <tr>
-              <th>کد</th><th>شرکت</th><th>موبایل</th><th>وضعیت</th><th>غرفه</th><th>تاریخ</th>
+              <th>کد</th><th>نام</th><th>کد ملی</th><th>موبایل</th><th>شرکت</th><th>وضعیت</th><th>تاریخ</th>
             </tr>
           </thead>
           <tbody>
             {items.map((r) => (
               <tr key={r.id} onClick={() => nav(`/admin/registrations/${r.id}`)}>
                 <td className="mono">{r.code}</td>
-                <td>{r.companyName}</td>
+                <td>{[r.firstName, r.lastName].filter(Boolean).join(' ') || r.companyName}</td>
+                <td className="mono">{r.nationalId || '—'}</td>
                 <td className="mono">{r.mobile}</td>
+                <td>{r.companyName || '—'}</td>
                 <td><span className={`st-chip st-${r.status}`}>{ST_FA[r.status] || r.status}</span></td>
-                <td>{r.booth || '—'}</td>
                 <td>{new Date(r.createdAt).toLocaleDateString('fa-IR')}</td>
               </tr>
             ))}
@@ -207,10 +258,11 @@ function RegistrationDetail() {
   return (
     <>
       <Link to="/admin/registrations" className="text-link">بازگشت</Link>
-      <h1>{r.companyName}</h1>
+      <h1>{[r.firstName, r.lastName].filter(Boolean).join(' ') || r.companyName || r.code}</h1>
       <div className="ad-detail">
         <section>
           <p className="mono">{r.code}</p>
+          <p>{[r.firstName, r.lastName].filter(Boolean).join(' ')}</p>
           {r.qr ? <img className="ad-qr" src={r.qr} alt="" /> : null}
           <label>وضعیت
             <select value={r.status} onChange={(e) => save({ status: e.target.value })}>
@@ -226,7 +278,11 @@ function RegistrationDetail() {
         </section>
         <section>
           <dl className="ad-dl">
-            <dt>حوزه</dt><dd>{r.activityField}</dd>
+            <dt>نام</dt><dd>{r.firstName} {r.lastName}</dd>
+            <dt>کد ملی</dt><dd className="mono">{r.nationalId || '—'}</dd>
+            <dt>موبایل</dt><dd className="mono">{r.mobile}</dd>
+            <dt>ورود</dt><dd>{r.checkedInAt ? new Date(r.checkedInAt).toLocaleString('fa-IR') : '—'}</dd>
+            <dt>حوزه</dt><dd>{r.activityField || '—'}</dd>
             <dt>محل ثبت</dt><dd>{r.registerPlace}</dd>
             <dt>نوع</dt><dd>{r.companyType}</dd>
             <dt>دانش‌بنیان</dt><dd>{r.knowledgeBased ? 'بله' : 'خیر'}</dd>
@@ -243,6 +299,82 @@ function RegistrationDetail() {
           </dl>
         </section>
       </div>
+    </>
+  )
+}
+
+function SecretariatAdmin() {
+  const [items, setItems] = useState([])
+  const [open, setOpen] = useState(null)
+  async function load() {
+    const out = await api('/admin/secretariat', { admin: true })
+    setItems(out.items || [])
+  }
+  useEffect(() => { load().catch(() => {}) }, [])
+  async function mark(id, status) {
+    await api(`/admin/secretariat/${id}`, { method: 'PATCH', admin: true, body: { status } })
+    load()
+  }
+  async function file(id, name) {
+    const blob = await api(`/admin/files/${id}`, { admin: true })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = name || 'file'
+    a.click()
+  }
+  return (
+    <>
+      <div className="ad-head">
+        <h1>دبیرخانه</h1>
+        <div className="ad-export">
+          <button className="ad-btn ghost" type="button" onClick={() => download('/admin/secretariat.xls', 'atw-secretariat.xls')}>Excel</button>
+          <button className="ad-btn ghost" type="button" onClick={() => openPrint('/admin/secretariat.pdf')}>PDF</button>
+        </div>
+      </div>
+      <div className="ad-table-wrap">
+        <table className="ad-table">
+          <thead>
+            <tr><th>نوع</th><th>نام</th><th>سازمان</th><th>موضوع</th><th>وضعیت</th><th></th></tr>
+          </thead>
+          <tbody>
+            {items.map((m) => (
+              <tr key={m.id} onClick={() => setOpen(m)}>
+                <td>{m.actorType}</td>
+                <td>{m.name}<div className="muted">{(m.message || '').slice(0, 80)}</div></td>
+                <td>{m.org || '—'}</td>
+                <td>{m.subject || '—'}</td>
+                <td>{ST_FA[m.status] || m.status}</td>
+                <td>
+                  {m.status === 'new' && <button type="button" className="ad-btn ghost" onClick={(e) => { e.stopPropagation(); mark(m.id, 'read') }}>خوانده</button>}
+                  {m.status !== 'done' && <button type="button" className="ad-btn ghost" onClick={(e) => { e.stopPropagation(); mark(m.id, 'done') }}>انجام</button>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {open && (
+        <div className="cms-modal" onClick={() => setOpen(null)}>
+          <div className="cms-modal-card" onClick={(e) => e.stopPropagation()}>
+            <header>
+              <h2>{open.subject || open.name}</h2>
+              <button type="button" className="ad-btn ghost" onClick={() => setOpen(null)}>بستن</button>
+            </header>
+            <dl className="ad-dl">
+              <dt>نوع</dt><dd>{open.actorType}</dd>
+              <dt>نام</dt><dd>{open.name}</dd>
+              <dt>سازمان</dt><dd>{open.org || '—'}</dd>
+              <dt>ایمیل</dt><dd>{open.email || '—'}</dd>
+              <dt>تلفن</dt><dd>{open.phone || '—'}</dd>
+              <dt>تاریخ</dt><dd>{new Date(open.createdAt).toLocaleString('fa-IR')}</dd>
+            </dl>
+            <p style={{ whiteSpace: 'pre-wrap', marginTop: 16 }}>{open.message}</p>
+            {open.fileId ? (
+              <p><button type="button" className="ad-btn" onClick={() => file(open.fileId, open.file?.name)}>دانلود پیوست</button></p>
+            ) : null}
+          </div>
+        </div>
+      )}
     </>
   )
 }
@@ -353,6 +485,7 @@ export default function AdminApp() {
         <Route index element={<Overview />} />
         <Route path="registrations" element={<Registrations />} />
         <Route path="registrations/:id" element={<RegistrationDetail />} />
+        <Route path="secretariat" element={<SecretariatAdmin />} />
         <Route path="messages" element={<Messages />} />
         <Route path="content" element={<Guard me={me} role="admin"><ContentStudio tab="text" /></Guard>} />
         <Route path="media" element={<Guard me={me} role="admin"><ContentStudio tab="media" /></Guard>} />

@@ -10,7 +10,6 @@ export default function Status() {
   const { t } = useI18n()
   const s = t.statusPage
   const [code, setCode] = useState(param || '')
-  const [mobile, setMobile] = useState('')
   const [row, setRow] = useState(null)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
@@ -34,7 +33,7 @@ export default function Status() {
     setErr('')
     setBusy(true)
     try {
-      const out = await api('/status-lookup', { method: 'POST', body: { code, mobile } })
+      const out = await api('/status-lookup', { method: 'POST', body: { code } })
       setRow(out.registration)
     } catch (ex) {
       setErr(ex.message)
@@ -50,14 +49,13 @@ export default function Status() {
         <form className="form reg-card" onSubmit={lookup}>
           {err ? <div className="form-error">{err}</div> : null}
           <label>{s.code}<input required value={code} onChange={(e) => setCode(e.target.value)} placeholder="ATW26-XXXX-XXXX" /></label>
-          <label>{s.mobile}<input required value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="09xxxxxxxxx" /></label>
           <DiamondButton type="submit">{busy ? t.register.wait : s.submit}</DiamondButton>
         </form>
       )}
       {row && (
         <div className="reg-card qr-card">
           <div className={`st-chip st-${row.status}`}>{t.register.status[row.status] || row.status}</div>
-          <h3>{row.companyName}</h3>
+          <h3>{row.displayName || row.companyName}</h3>
           <div className="track-code">{row.code}</div>
           {row.qr ? <div className="qr-box"><img src={row.qr} alt="" /></div> : null}
           {row.booth ? <p>{s.booth}: {row.booth}</p> : null}

@@ -10,6 +10,7 @@ const Visit = lazy(() => import('./pages/Visit'))
 const Problems = lazy(() => import('./pages/Problems'))
 const Venue = lazy(() => import('./pages/Venue'))
 const Register = lazy(() => import('./pages/Register'))
+const Secretariat = lazy(() => import('./pages/Secretariat'))
 const Status = lazy(() => import('./pages/Status'))
 const AdminApp = lazy(() => import('./pages/admin/AdminApp'))
 const News = lazy(() => import('./pages/News'))
@@ -28,6 +29,7 @@ export default function App() {
             <Route path="problems" element={<Problems />} />
             <Route path="venue" element={<Venue />} />
             <Route path="register" element={<Register />} />
+            <Route path="secretariat" element={<Secretariat />} />
             <Route path="status" element={<Status />} />
             <Route path="status/:code" element={<Status />} />
             <Route path="news" element={<News />} />
@@ -39,6 +41,7 @@ export default function App() {
             <Route path="en/problems" element={<Problems />} />
             <Route path="en/venue" element={<Venue />} />
             <Route path="en/register" element={<Register />} />
+            <Route path="en/secretariat" element={<Secretariat />} />
             <Route path="en/status" element={<Status />} />
             <Route path="en/status/:code" element={<Status />} />
             <Route path="en/news" element={<News />} />

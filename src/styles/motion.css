@@ -979,6 +979,13 @@ body.scrolled .header {
   color: var(--blue-100);
 }
 .reg-card { max-width: 640px; }
+.opt { color: var(--muted); font-size: 12px; font-weight: 400; letter-spacing: 0; }
+.hp-field {
+  position: absolute;
+  left: -9999px;
+  height: 0;
+  overflow: hidden;
+}
 .reg-bar, .staff-row {
   display: flex;
   flex-wrap: wrap;

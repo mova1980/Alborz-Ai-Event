@@ -11,6 +11,11 @@ import { DEFAULT_MEDIA } from '../src/lib/cms.js'
 import { sendOtp, smsConfigured } from './sms.js'
 import { makeQr, statusUrl } from './qr.js'
 import { IS_PROD } from './env.js'
+import {
+  clip, clientIp, hitLimit, parseFile, readPerson, assertPerson,
+} from './validate.js'
+import { excelXml, reportHtml, sendDownload, registrationRows, secretariatRows } from './report.js'
+import { upsertRegistration, upsertSecretariat, upsertFile } from './tables.js'
 
 const ALLOWED_IMG = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'])
 
@@ -57,19 +62,37 @@ function need(session, roles) {
 
 function publicReg(r, { qr } = {}) {
   if (!r) return null
+  const name = [r.firstName, r.lastName].filter(Boolean).join(' ')
   const out = {
     id: r.id,
     code: r.code,
     status: r.status,
-    companyName: r.companyName,
+    firstName: r.firstName || '',
+    lastName: r.lastName || '',
+    displayName: name || r.companyName || '',
+    companyName: r.companyName || '',
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
     booth: r.booth || '',
     adminNote: r.adminNote || '',
     statusUrl: r.statusUrl,
+    checkedInAt: r.checkedInAt || 0,
   }
   if (qr) out.qr = r.qr
   return out
+}
+
+function uniqueCode(d) {
+  for (let i = 0; i < 16; i++) {
+    const code = trackingCode()
+    if (!d.registrations.some((r) => r.code === code)) return code
+  }
+  return `ATW26-${Date.now().toString(36).toUpperCase()}`
+}
+
+function fileMeta(rec) {
+  if (!rec) return null
+  return { id: rec.id, name: rec.name, mime: rec.mime, size: rec.size || 0, createdAt: rec.createdAt }
 }
 
 export async function handleApi(req, res) {
@@ -209,68 +232,78 @@ export async function handleApi(req, res) {
     if (path === '/status/lookup' && method === 'POST') {
       const body = await readBody(req)
       const code = String(body.code || '').trim().toUpperCase()
-      const mobile = normalizeMobile(body.mobile)
       const r = await getRegByCode(code)
-      if (!r || r.mobile !== mobile) return json(res, 404, { error: 'not_found', message: 'کد یا شماره هم‌خوان نیست.' })
+      if (!r) return json(res, 404, { error: 'not_found', message: 'کد پیگیری یافت نشد.' })
+      const mobile = body.mobile ? normalizeMobile(body.mobile) : ''
+      if (mobile && r.mobile !== mobile) return json(res, 404, { error: 'not_found', message: 'کد یا شماره هم‌خوان نیست.' })
       return json(res, 200, { registration: publicReg(r, { qr: true }) })
     }
 
-    /* ---------- Company register ---------- */
+    /* ---------- Public register (no SMS) ---------- */
     if (path === '/register' && method === 'POST') {
-      const s = auth(req)
-      const denied = need(s, ['company'])
-      if (denied) return json(res, 401, { error: denied, message: 'با شماره همراه وارد شوید.' })
       const data0 = await load()
       if (data0.content && data0.content.registrationOpen === false) {
         return json(res, 403, { error: 'closed', message: 'ثبت‌نام در حال حاضر بسته است.' })
       }
       const b = await readBody(req)
-      const companyName = String(b.companyName || '').trim()
-      const activityField = String(b.activityField || '').trim()
-      const registerPlace = String(b.registerPlace || '').trim()
-      const companyType = String(b.companyType || '').trim()
-      const address = String(b.address || '').trim()
-      const phone = String(b.phone || '').trim()
-      const representative = {
-        name: String(b.representative?.name || b.repName || '').trim(),
-        role: String(b.representative?.role || b.repRole || '').trim(),
-        mobile: normalizeMobile(b.representative?.mobile || b.repMobile || s.mobile),
+      if (clip(b.website || b.hp || '', 80)) {
+        return json(res, 201, { ok: true })
       }
-      const equipment = String(b.equipment || '').trim()
+      const person = readPerson(b)
+      const bad = assertPerson(person)
+      if (bad) return json(res, 400, { error: 'required', message: bad })
+      const companyName = clip(b.companyName, 160)
+      const activityField = clip(b.activityField, 80)
+      const registerPlace = clip(b.registerPlace, 120)
+      const companyType = clip(b.companyType, 80)
+      const address = clip(b.address, 500)
+      const phone = clip(b.phone, 40)
+      const representative = {
+        name: clip(b.representative?.name || b.repName || `${person.firstName} ${person.lastName}`, 80),
+        role: clip(b.representative?.role || b.repRole, 80),
+        mobile: normalizeMobile(b.representative?.mobile || b.repMobile || person.mobile),
+      }
+      const equipment = clip(b.equipment, 500)
       const staff = Array.isArray(b.staff)
         ? b.staff.map((p) => ({
-          name: String(p.name || '').trim(),
-          role: String(p.role || '').trim(),
+          name: clip(p.name, 80),
+          role: clip(p.role, 80),
           mobile: p.mobile ? normalizeMobile(p.mobile) : '',
-        })).filter((p) => p.name)
+        })).filter((p) => p.name).slice(0, 12)
         : []
-      const knowledgeBased = Boolean(b.knowledgeBased)
-      const nasrMember = Boolean(b.nasrMember)
-      const kbAssocMember = Boolean(b.kbAssocMember)
-
-      if (!companyName || !activityField || !registerPlace || !companyType || !address || !phone || !representative.name) {
-        return json(res, 400, { error: 'required', message: 'فیلدهای ستاره‌دار را کامل کنید.' })
-      }
-      if (staff.length < 1) return json(res, 400, { error: 'staff', message: 'دست‌کم یک نفر غرفه را وارد کنید.' })
-
       const origin = publicOrigin(req)
+      const ip = clientIp(req)
+      let err = ''
       const rec = await mutate(async (d) => {
-        const code = trackingCode()
+        const wait = hitLimit(d, `reg:${ip}`, 8, 60 * 60 * 1000)
+        if (wait) { err = `too_many:${wait}`; return null }
+        if (d.registrations.some((r) => r.nationalId === person.nationalId)) {
+          err = 'dup_nid'
+          return null
+        }
+        if (d.registrations.some((r) => r.mobile === person.mobile)) {
+          err = 'dup_mobile'
+          return null
+        }
+        const code = uniqueCode(d)
         const statusLink = statusUrl(origin, code)
         const qr = await makeQr(statusLink)
         const now = Date.now()
         const row = {
           id: newId('reg'),
           code,
-          mobile: s.mobile,
+          firstName: person.firstName,
+          lastName: person.lastName,
+          nationalId: person.nationalId,
+          mobile: person.mobile,
           status: 'submitted',
           companyName,
           activityField,
           registerPlace,
           companyType,
-          knowledgeBased,
-          nasrMember,
-          kbAssocMember,
+          knowledgeBased: Boolean(b.knowledgeBased),
+          nasrMember: Boolean(b.nasrMember),
+          kbAssocMember: Boolean(b.kbAssocMember),
           address,
           phone,
           representative,
@@ -282,11 +315,80 @@ export async function handleApi(req, res) {
           statusUrl: statusLink,
           createdAt: now,
           updatedAt: now,
+          checkedInAt: 0,
+          ip,
         }
         d.registrations.unshift(row)
         return row
       })
+      if (err === 'dup_nid') return json(res, 409, { error: 'duplicate', message: 'با این کد ملی قبلاً ثبت‌نام شده است.' })
+      if (err === 'dup_mobile') return json(res, 409, { error: 'duplicate', message: 'با این شماره همراه قبلاً ثبت‌نام شده است.' })
+      if (err.startsWith('too_many:')) {
+        return json(res, 429, { error: 'rate', message: 'تعداد درخواست‌ها زیاد است. بعداً تلاش کنید.' })
+      }
+      if (!rec) return json(res, 500, { error: 'server', message: 'ثبت انجام نشد.' })
+      upsertRegistration(rec).catch(() => {})
       return json(res, 201, { ok: true, registration: publicReg(rec, { qr: true }) })
+    }
+
+    /* ---------- Secretariat ---------- */
+    if (path === '/secretariat' && method === 'POST') {
+      const b = await readBody(req)
+      if (clip(b.website || b.hp || '', 80)) return json(res, 201, { ok: true })
+      const name = clip(b.name, 80)
+      const message = clip(b.message, 4000)
+      const actorType = clip(b.actorType || b.type, 40)
+      if (!name || !message) return json(res, 400, { error: 'required', message: 'نام و متن پیام لازم است.' })
+      const ip = clientIp(req)
+      let fileRec = null
+      if (b.file && b.file.data) {
+        const parsed = parseFile(b.file)
+        if (parsed?.error) return json(res, 400, { error: 'file', message: parsed.error })
+        if (parsed) {
+          fileRec = {
+            id: newId('file'),
+            name: parsed.name,
+            mime: parsed.mime,
+            size: parsed.size,
+            b64: parsed.b64,
+            createdAt: Date.now(),
+          }
+        }
+      }
+      let err = ''
+      const rec = await mutate((d) => {
+        const wait = hitLimit(d, `sec:${ip}`, 6, 60 * 60 * 1000)
+        if (wait) { err = 'rate'; return null }
+        if (fileRec) {
+          d.files = d.files || {}
+          d.files[fileRec.id] = fileRec
+        }
+        const row = {
+          id: newId('sec'),
+          kind: 'secretariat',
+          actorType: actorType || 'other',
+          name,
+          org: clip(b.org, 160),
+          role: clip(b.role, 80),
+          email: clip(b.email, 120),
+          phone: clip(b.phone, 40),
+          subject: clip(b.subject, 160),
+          message,
+          fileId: fileRec?.id || '',
+          file: fileRec ? fileMeta(fileRec) : null,
+          status: 'new',
+          createdAt: Date.now(),
+          ip,
+        }
+        d.secretariat = d.secretariat || []
+        d.secretariat.unshift(row)
+        return row
+      })
+      if (err === 'rate') return json(res, 429, { error: 'rate', message: 'تعداد درخواست‌ها زیاد است. بعداً تلاش کنید.' })
+      if (!rec) return json(res, 500, { error: 'server' })
+      upsertSecretariat(rec).catch(() => {})
+      if (fileRec) upsertFile(fileRec).catch(() => {})
+      return json(res, 201, { ok: true, id: rec.id })
     }
 
     /* ---------- Contact / existing forms ---------- */
@@ -325,7 +427,20 @@ export async function handleApi(req, res) {
       if (path === '/admin/overview' && method === 'GET') {
         const d = await load()
         const by = {}
-        for (const r of d.registrations) by[r.status] = (by[r.status] || 0) + 1
+        const byDayMap = {}
+        let checkedIn = 0
+        const start = Date.now() - 13 * 86400000
+        for (let i = 0; i < 14; i++) {
+          const day = new Date(start + i * 86400000).toISOString().slice(0, 10)
+          byDayMap[day] = 0
+        }
+        for (const r of d.registrations) {
+          by[r.status] = (by[r.status] || 0) + 1
+          if (r.status === 'checked_in' || r.checkedInAt) checkedIn += 1
+          const day = new Date(r.createdAt || 0).toISOString().slice(0, 10)
+          if (day in byDayMap) byDayMap[day] += 1
+        }
+        const secs = d.secretariat || []
         return json(res, 200, {
           role: s.role,
           persistence: persistenceKind(),
@@ -335,6 +450,10 @@ export async function handleApi(req, res) {
             messages: d.messages.length,
             unread: d.messages.filter((m) => m.status === 'new').length,
             byStatus: by,
+            checkedIn,
+            secretariat: secs.length,
+            secretariatNew: secs.filter((m) => m.status === 'new').length,
+            byDay: Object.keys(byDayMap).sort().map((k) => ({ d: k, n: byDayMap[k] })),
           },
           content: d.content,
         })
@@ -347,7 +466,8 @@ export async function handleApi(req, res) {
         let list = d.registrations
         if (st) list = list.filter((r) => r.status === st)
         if (q) {
-          list = list.filter((r) => [r.code, r.companyName, r.mobile, r.phone, r.representative?.name]
+          list = list.filter((r) => [r.code, r.companyName, r.mobile, r.phone, r.nationalId,
+            r.firstName, r.lastName, r.representative?.name]
             .join(' ').toLowerCase().includes(q))
         }
         return json(res, 200, { items: list })
@@ -367,20 +487,92 @@ export async function handleApi(req, res) {
         const row = await mutate((d) => {
           const r = d.registrations.find((x) => x.id === id)
           if (!r) return null
-          if (b.status && allowed.includes(b.status)) r.status = b.status
+          if (b.status && allowed.includes(b.status)) {
+            r.status = b.status
+            if (b.status === 'checked_in' && !r.checkedInAt) {
+              r.checkedInAt = Date.now()
+              r.checkedInBy = s.user
+            }
+          }
           if (typeof b.booth === 'string') r.booth = b.booth.trim()
           if (typeof b.adminNote === 'string') r.adminNote = b.adminNote.trim()
           r.updatedAt = Date.now()
           r.updatedBy = s.user
+          upsertRegistration(r).catch(() => {})
           return r
         })
         if (!row) return json(res, 404, { error: 'not_found' })
         return json(res, 200, { item: row })
       }
 
+      if (path === '/admin/checkin' && method === 'POST') {
+        const b = await readBody(req)
+        const code = String(b.code || '').trim().toUpperCase()
+        let already = false
+        const row = await mutate((d) => {
+          const r = d.registrations.find((x) => x.code === code || x.id === code)
+          if (!r) return null
+          already = Boolean(r.checkedInAt)
+          if (!already) {
+            r.status = 'checked_in'
+            r.checkedInAt = Date.now()
+            r.checkedInBy = s.user
+            r.updatedAt = Date.now()
+            upsertRegistration(r).catch(() => {})
+          }
+          return r
+        })
+        if (!row) return json(res, 404, { error: 'not_found', message: 'کد یافت نشد.' })
+        return json(res, 200, { item: row, already })
+      }
+
       if (path === '/admin/messages' && method === 'GET') {
         const d = await load()
         return json(res, 200, { items: d.messages })
+      }
+
+      if (path === '/admin/secretariat' && method === 'GET') {
+        const d = await load()
+        const items = (d.secretariat || []).map((m) => ({ ...m, file: m.file || null }))
+        return json(res, 200, { items })
+      }
+
+      if (path.startsWith('/admin/secretariat/') && method === 'GET') {
+        const id = path.slice('/admin/secretariat/'.length)
+        const d = await load()
+        const m = (d.secretariat || []).find((x) => x.id === id)
+        if (!m) return json(res, 404, { error: 'not_found' })
+        return json(res, 200, { item: m })
+      }
+
+      if (path.startsWith('/admin/secretariat/') && method === 'PATCH') {
+        const id = path.slice('/admin/secretariat/'.length)
+        const b = await readBody(req)
+        const row = await mutate((d) => {
+          const m = (d.secretariat || []).find((x) => x.id === id)
+          if (!m) return null
+          if (b.status) m.status = String(b.status)
+          if (typeof b.adminNote === 'string') m.adminNote = b.adminNote.trim()
+          m.updatedAt = Date.now()
+          upsertSecretariat(m).catch(() => {})
+          return m
+        })
+        if (!row) return json(res, 404, { error: 'not_found' })
+        return json(res, 200, { item: row })
+      }
+
+      if (path.startsWith('/admin/files/') && method === 'GET') {
+        const id = path.slice('/admin/files/'.length).replace(/[^a-zA-Z0-9_-]/g, '')
+        const d = await load()
+        const f = d.files?.[id]
+        if (!f?.b64) return json(res, 404, { error: 'not_found' })
+        const buf = Buffer.from(f.b64, 'base64')
+        res.statusCode = 200
+        res.setHeader('Content-Type', f.mime || 'application/octet-stream')
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(f.name || id)}"`)
+        res.setHeader('Cache-Control', 'no-store')
+        res.end(buf)
+        return
       }
 
       if (path.startsWith('/admin/messages/') && method === 'PATCH') {
@@ -466,25 +658,62 @@ export async function handleApi(req, res) {
         return json(res, 200, { ok: true })
       }
 
-      if (path === '/admin/export' && method === 'GET') {
+      if ((path === '/admin/export' || path === '/admin/export.csv') && method === 'GET') {
         const d = await load()
-        const header = ['code', 'status', 'companyName', 'mobile', 'activityField', 'registerPlace', 'companyType', 'knowledgeBased', 'nasrMember', 'kbAssocMember', 'address', 'phone', 'repName', 'repMobile', 'staff', 'equipment', 'booth', 'createdAt']
-        const lines = [header.join(',')]
-        for (const r of d.registrations) {
-          const cells = [
-            r.code, r.status, r.companyName, r.mobile, r.activityField, r.registerPlace, r.companyType,
-            r.knowledgeBased, r.nasrMember, r.kbAssocMember, r.address, r.phone,
-            r.representative?.name, r.representative?.mobile,
-            (r.staff || []).map((p) => p.name).join('|'),
-            r.equipment, r.booth, new Date(r.createdAt).toISOString(),
-          ].map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`)
-          lines.push(cells.join(','))
+        const { headers, rows } = registrationRows(d.registrations)
+        const lines = [headers.join(',')]
+        for (const r of rows) {
+          lines.push(r.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))
         }
-        const csv = `\ufeff${lines.join('\n')}`
-        res.statusCode = 200
-        res.setHeader('Content-Type', 'text/csv; charset=utf-8')
-        res.setHeader('Content-Disposition', 'attachment; filename="atw-registrations.csv"')
-        res.end(csv)
+        sendDownload(res, {
+          mime: 'text/csv; charset=utf-8',
+          filename: 'atw-registrations.csv',
+          body: `\ufeff${lines.join('\n')}`,
+        })
+        return
+      }
+
+      if (path === '/admin/export.xls' && method === 'GET') {
+        const d = await load()
+        const { headers, rows } = registrationRows(d.registrations)
+        sendDownload(res, {
+          mime: 'application/vnd.ms-excel; charset=utf-8',
+          filename: 'atw-registrations.xls',
+          body: excelXml('registrations', headers, rows),
+        })
+        return
+      }
+
+      if (path === '/admin/export.pdf' && method === 'GET') {
+        const d = await load()
+        const { headers, rows } = registrationRows(d.registrations)
+        sendDownload(res, {
+          mime: 'text/html; charset=utf-8',
+          filename: 'atw-registrations.html',
+          body: reportHtml({ title: 'ثبت‌نام‌های هفته تکنولوژی البرز', headers, rows, rtl: true }),
+        })
+        return
+      }
+
+      if (path === '/admin/secretariat.xls' && method === 'GET') {
+        const d = await load()
+        const { headers, rows } = secretariatRows(d.secretariat || [])
+        sendDownload(res, {
+          mime: 'application/vnd.ms-excel; charset=utf-8',
+          filename: 'atw-secretariat.xls',
+          body: excelXml('secretariat', headers, rows),
+        })
+        return
+      }
+
+      if (path === '/admin/secretariat.pdf' && method === 'GET') {
+        const d = await load()
+        const { headers, rows } = secretariatRows(d.secretariat || [])
+        sendDownload(res, {
+          mime: 'text/html; charset=utf-8',
+          filename: 'atw-secretariat.html',
+          body: reportHtml({ title: 'دبیرخانه هفته تکنولوژی البرز', headers, rows, rtl: true }),
+        })
         return
       }
 

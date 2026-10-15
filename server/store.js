@@ -5,6 +5,9 @@ import { createClient } from '@supabase/supabase-js'
 const empty = () => ({
   registrations: [],
   messages: [],
+  secretariat: [],
+  files: {},
+  limits: {},
   otps: {},
   content: { registrationOpen: true, noticeFa: '', noticeEn: '' },
   media: [],
