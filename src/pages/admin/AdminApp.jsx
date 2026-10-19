@@ -152,8 +152,8 @@ function Overview() {
       <h1>نمای کلی</h1>
       <div className="ad-stats">
         <article><b>{c.registrations}</b><span>ثبت‌نام</span></article>
-        <article><b>{c.todayIn || 0}</b><span>الان در مجموعه (امروز)</span></article>
-        <article><b>{c.checkedIn || 0}</b><span>کل ورود ثبت‌شده</span></article>
+        <article><b>{c.todayIn || 0}</b><span>الان داخل مجموعه</span></article>
+        <article><b>{c.checkedIn || 0}</b><span>حداقل یک ورود</span></article>
         <article><b>{c.secretariatNew || 0}</b><span>نامه جدید دبیرخانه</span></article>
       </div>
       <div className="ad-charts">
@@ -162,15 +162,15 @@ function Overview() {
           <Bars items={STATUSES.map((s) => ({ l: ST_FA[s], n: c.byStatus?.[s] || 0 }))} />
         </section>
         <section className="ad-card">
-          <h2>ورود روزانه (اسکن گیت)</h2>
+          <h2>ورود روزانه</h2>
           <Bars items={(c.entryByDay || []).map((x) => ({ l: x.d.slice(5), n: x.n }))} />
         </section>
       </div>
       <div className="ad-head">
-        <h2>حاضرین امروز</h2>
+        <h2>حاضرین الان</h2>
         <div className="ad-export">
-          <button className="ad-btn ghost" type="button" onClick={() => download('/admin/presence.xls', 'atw-presence.xls')}>Excel ورود</button>
-          <button className="ad-btn ghost" type="button" onClick={() => openPrint('/admin/presence.pdf')}>چاپ ورود</button>
+          <button className="ad-btn ghost" type="button" onClick={() => download('/admin/presence.xls', 'atw-presence.xls')}>Excel ورود/خروج</button>
+          <button className="ad-btn ghost" type="button" onClick={() => openPrint('/admin/presence.pdf')}>چاپ ورود/خروج</button>
         </div>
       </div>
       <div className="ad-table-wrap">
@@ -241,6 +241,17 @@ function Gate() {
     setBusy(true)
     try {
       const out = await api('/admin/checkin', { method: 'POST', admin: true, body: { code: raw } })
+      if (!out.allowed) {
+        setFlash({
+          ok: false,
+          text: 'غیر مجاز',
+          sub: 'این بارکد در سامانه ثبت نشده است.',
+          name: '',
+          mobile: '',
+        })
+        refresh().catch(() => {})
+        return
+      }
       const ticket = ticketOf(out.item, {
         barcode: out.barcode,
         firstName: out.firstName,
@@ -249,16 +260,17 @@ function Gate() {
       })
       setFlash({
         ok: true,
-        already: out.already,
+        dir: out.dir,
         name: out.name,
         mobile: out.mobile,
         ticket,
-        text: out.already ? 'امروز قبلاً وارد شده است.' : 'ورود ثبت شد.',
+        text: 'مجاز',
+        sub: out.dir === 'out' ? 'خروج ثبت شد.' : 'ورود ثبت شد.',
       })
-      if (!out.already) setPreview(ticket)
+      if (out.firstEver && out.dir === 'in') setPreview(ticket)
       refresh().catch(() => {})
     } catch (ex) {
-      setFlash({ ok: false, text: errorText(ex, 'بارکد نامعتبر است.'), name: '', mobile: '' })
+      setFlash({ ok: false, text: 'غیر مجاز', sub: errorText(ex, 'بارکد در سامانه نیست.'), name: '', mobile: '' })
     } finally {
       setBusy(false)
       setTimeout(focusScan, 50)
@@ -269,11 +281,11 @@ function Gate() {
   return (
     <>
       <h1>گیت ورود</h1>
-      <p className="muted">اسکنر Cbon N-200 را روی این فیلد بگذارید. با Enter ثبت می‌شود. فیش را با Axiom POS80U چاپ کنید.</p>
+      <p className="muted">اسکنر Cbon N-200 روی این فیلد. Enter = مجاز یا غیر مجاز. فیش ۸۰mm را ادمین با POS80U چاپ می‌کند.</p>
       <div className="ad-stats">
-        <article><b>{c.todayIn || 0}</b><span>الان در مجموعه</span></article>
-        <article><b>{c.checkedIn || 0}</b><span>کل ورود</span></article>
-        <article><b>{c.registrations || 0}</b><span>ثبت‌نام کل</span></article>
+        <article><b>{c.todayIn || 0}</b><span>الان داخل</span></article>
+        <article><b>{c.todayPass || 0}</b><span>تردد امروز</span></article>
+        <article><b>{c.deniedToday || 0}</b><span>غیرمجاز امروز</span></article>
         <article><b>{d?.today || '—'}</b><span>تاریخ تهران</span></article>
       </div>
       <form className="ad-gate" onSubmit={submit}>
@@ -286,20 +298,21 @@ function Gate() {
           autoFocus
           disabled={busy}
         />
-        <button className="ad-btn" type="submit" disabled={busy}>ثبت ورود</button>
+        <button className="ad-btn" type="submit" disabled={busy}>اسکن</button>
       </form>
       {flash ? (
-        <div className={`ad-flash ${flash.ok ? (flash.already ? 'is-warn' : 'is-ok') : 'is-bad'}`}>
-          <b>{flash.text}</b>
+        <div className={`ad-flash ${flash.ok ? 'is-ok' : 'is-bad'}`}>
+          <b className="gate-v">{flash.text}</b>
+          {flash.sub ? <span className="gate-dir">{flash.sub}</span> : null}
           {flash.name ? <span>{flash.name}</span> : null}
           {flash.mobile ? <span className="mono">{flash.mobile}</span> : null}
           {flash.ticket ? (
-            <button type="button" className="ad-btn ghost" onClick={() => setPreview(flash.ticket)}>پیش‌نمایش فیش</button>
+            <button type="button" className="ad-btn ghost" onClick={() => setPreview(flash.ticket)}>پیش‌نمایش فیش POS80U</button>
           ) : null}
         </div>
       ) : null}
       <div className="ad-head">
-        <h2>لیست زنده امروز</h2>
+        <h2>الان داخل مجموعه</h2>
         <div className="ad-export">
           <button className="ad-btn ghost" type="button" onClick={() => download('/admin/presence.xls', 'atw-presence.xls')}>Excel</button>
           <button className="ad-btn ghost" type="button" onClick={() => openPrint('/admin/presence.pdf')}>چاپ گزارش</button>
@@ -308,19 +321,39 @@ function Gate() {
       <div className="ad-table-wrap">
         <table className="ad-table">
           <thead>
-            <tr><th>ساعت</th><th>نام</th><th>موبایل</th><th>شرکت</th><th>کد</th><th></th></tr>
+            <tr><th>ورود</th><th>نام</th><th>موبایل</th><th>کد</th><th></th></tr>
           </thead>
           <tbody>
             {(d?.inside || []).map((p) => (
               <tr key={p.id}>
-                <td>{new Date(p.at).toLocaleTimeString('fa-IR', { timeZone: 'Asia/Tehran' })}</td>
+                <td>{p.inAt ? new Date(p.inAt).toLocaleTimeString('fa-IR', { timeZone: 'Asia/Tehran' }) : '—'}</td>
                 <td>{p.name}</td>
                 <td className="mono">{p.mobile}</td>
-                <td>{p.companyName || '—'}</td>
                 <td className="mono">{p.code}</td>
                 <td>
                   <button type="button" className="ad-btn ghost" onClick={() => setPreview(ticketOf(p))}>فیش</button>
                 </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="ad-head">
+        <h2>تردد امروز (ورود / خروج / غیرمجاز)</h2>
+      </div>
+      <div className="ad-table-wrap">
+        <table className="ad-table">
+          <thead>
+            <tr><th>ساعت</th><th>وضعیت</th><th>نام</th><th>موبایل</th><th>کد</th></tr>
+          </thead>
+          <tbody>
+            {(d?.traffic || []).map((p) => (
+              <tr key={p.id}>
+                <td>{new Date(p.at).toLocaleTimeString('fa-IR', { timeZone: 'Asia/Tehran' })}</td>
+                <td>{p.allowed === false ? 'غیر مجاز' : (p.dir === 'out' ? 'خروج' : 'ورود')}</td>
+                <td>{p.name || '—'}</td>
+                <td className="mono">{p.mobile || '—'}</td>
+                <td className="mono">{p.code}</td>
               </tr>
             ))}
           </tbody>
@@ -355,11 +388,12 @@ function Registrations() {
     setScanMsg('')
     try {
       const out = await api('/admin/checkin', { method: 'POST', admin: true, body: { code: scan } })
-      setScanMsg(out.already ? 'قبلاً وارد شده است.' : 'ورود ثبت شد.')
+      if (!out.allowed) setScanMsg('غیر مجاز')
+      else setScanMsg(out.dir === 'out' ? 'مجاز — خروج' : 'مجاز — ورود')
       setScan('')
       load()
     } catch (ex) {
-      setScanMsg(errorText(ex, 'کد یافت نشد.'))
+      setScanMsg(errorText(ex, 'غیر مجاز'))
     }
   }
   return (
@@ -452,7 +486,24 @@ function RegistrationDetail() {
             <dt>نام</dt><dd>{r.firstName} {r.lastName}</dd>
             <dt>کد ملی</dt><dd className="mono">{r.nationalId || '—'}</dd>
             <dt>موبایل</dt><dd className="mono">{r.mobile}</dd>
+            <dt>کد بلیط</dt><dd className="mono">{r.code}</dd>
             <dt>اولین ورود</dt><dd>{r.checkedInAt ? new Date(r.checkedInAt).toLocaleString('fa-IR', { timeZone: 'Asia/Tehran' }) : '—'}</dd>
+            <dt>تردد روزانه</dt>
+            <dd>
+              {(r.checkins || []).length === 0 ? '—' : (
+                <ul>
+                  {(r.checkins || []).map((c) => (
+                    <li key={c.day}>
+                      {c.day}
+                      {' — ورود '}
+                      {c.inAt || c.at ? new Date(c.inAt || c.at).toLocaleTimeString('fa-IR', { timeZone: 'Asia/Tehran' }) : '—'}
+                      {c.outAt ? ` — خروج ${new Date(c.outAt).toLocaleTimeString('fa-IR', { timeZone: 'Asia/Tehran' })}` : ''}
+                      {c.inside ? ' — داخل' : ' — خارج'}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </dd>
             <dt>حوزه</dt><dd>{r.activityField || '—'}</dd>
             <dt>محل ثبت</dt><dd>{r.registerPlace}</dd>
             <dt>نوع</dt><dd>{r.companyType}</dd>

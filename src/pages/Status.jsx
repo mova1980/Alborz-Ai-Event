@@ -50,7 +50,7 @@ export default function Status() {
       {!row && (
         <form className="form reg-card" onSubmit={lookup}>
           {err ? <div className="form-error">{err}</div> : null}
-          <label>{s.code}<input required value={code} onChange={(e) => setCode(e.target.value)} placeholder="ATW26-XXXX-XXXX" /></label>
+          <label>{s.code}<input required value={code} onChange={(e) => setCode(e.target.value)} placeholder="ATW000000001" /></label>
           <DiamondButton type="submit">{busy ? t.register.wait : s.submit}</DiamondButton>
         </form>
       )}

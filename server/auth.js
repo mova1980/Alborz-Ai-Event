@@ -64,7 +64,8 @@ export function newId(prefix = 'id') {
   return `${prefix}_${crypto.randomBytes(8).toString('hex')}`
 }
 
-export function trackingCode() {
-  const n = crypto.randomBytes(5).toString('hex').toUpperCase()
-  return `ATW26-${n.slice(0, 4)}-${n.slice(4)}`
+/** Linear ticket id: ATW + 9 digits, no punctuation. e.g. ATW000000042 */
+export function trackingCode(seq) {
+  const n = Math.max(1, Number(seq) || 1)
+  return `ATW${String(n).padStart(9, '0')}`
 }

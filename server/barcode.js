@@ -36,8 +36,12 @@ export function code128Widths(text) {
   return valuesOf(text).flatMap((v) => PAT[v].split('').map(Number))
 }
 
-export function barcodeSvg(text, { height = 56, module = 2, label = true } = {}) {
-  const t = String(text || '').toUpperCase()
+export function displayCode(s) {
+  return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+}
+
+export function barcodeSvg(text, { height = 64, module = 2, label = false } = {}) {
+  const t = displayCode(text)
   const widths = code128Widths(t)
   const quiet = 10 * module
   const w = widths.reduce((a, b) => a + b, 0) * module + quiet * 2
@@ -58,7 +62,9 @@ export function barcodeSvg(text, { height = 56, module = 2, label = true } = {})
 }
 
 export function barcodeDataUrl(text) {
-  const svg = barcodeSvg(text)
+  const t = displayCode(text)
+  if (!t) return ''
+  const svg = barcodeSvg(t, { label: false, height: 64, module: 2 })
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
 }
 
@@ -72,11 +78,11 @@ export function tehranDay(ms = Date.now()) {
 }
 
 export function normTrack(s) {
-  return String(s || '').toUpperCase().replace(/[^A-Z0-9-]/g, '').trim()
+  return displayCode(s)
 }
 
 export function codesMatch(stored, scanned) {
-  const a = normTrack(stored).replace(/-/g, '')
-  const b = normTrack(scanned).replace(/-/g, '')
+  const a = displayCode(stored)
+  const b = displayCode(scanned)
   return Boolean(a && b && a === b)
 }

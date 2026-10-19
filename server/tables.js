@@ -31,6 +31,7 @@ export async function upsertRegistration(row) {
     payload: row,
     created_at: iso(row.createdAt),
     updated_at: iso(row.updatedAt),
+    first_checked_in_at: row.checkedInAt ? iso(row.checkedInAt) : null,
   })
   if (error) console.error('atw_registrations', error.message)
 }
@@ -63,10 +64,34 @@ export async function insertCheckin(row) {
     registration_id: row.registrationId,
     code: row.code,
     day: row.day,
-    checked_in_at: iso(row.at),
+    checked_in_at: iso(row.inAt || row.at),
+    checked_out_at: row.outAt ? iso(row.outAt) : null,
     checked_in_by: row.by || '',
+    inside: row.inside !== false,
+    last_dir: row.lastDir || 'in',
+    last_at: iso(row.lastAt || row.at),
+    scan_count: row.scanCount || (row.scans || []).length || 1,
+    scans: row.scans || [],
   })
   if (error) console.error('atw_checkins', error.message)
+}
+
+export async function insertScan(row) {
+  const s = sb()
+  if (!s || !row) return
+  const { error } = await s.from('atw_scans').upsert({
+    id: row.id,
+    registration_id: row.registrationId || null,
+    code: row.code || '',
+    raw: row.raw || '',
+    day: row.day,
+    dir: row.dir || 'in',
+    allowed: row.allowed !== false,
+    at: iso(row.at),
+    checked_in_by: row.by || '',
+    payload: row,
+  })
+  if (error) console.error('atw_scans', error.message)
 }
 
 export async function upsertFile(meta) {

@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { createClient } from '@supabase/supabase-js'
+import { codesMatch } from './barcode.js'
 
 const empty = () => ({
   registrations: [],
@@ -13,6 +14,7 @@ const empty = () => ({
   media: [],
   mediaBlobs: {},
   seq: 1,
+  scans: [],
 })
 
 function filePath() {
@@ -135,8 +137,7 @@ export async function mutate(fn) {
 
 export async function getRegByCode(code) {
   const data = await readDisk()
-  const c = String(code || '').trim().toUpperCase()
-  return data.registrations.find((r) => r.code === c) || null
+  return data.registrations.find((r) => codesMatch(r.code, code) || r.id === code) || null
 }
 
 export async function getRegById(id) {

@@ -163,6 +163,12 @@
 .ad-flash.is-warn { border-color: #4d94ff; }
 .ad-flash.is-bad { border-color: #ff4d6a; background: rgba(255, 77, 106, 0.12); }
 .ad-flash .ad-btn { margin-top: 8px; width: max-content; }
+.ad-flash .gate-v {
+  font-size: 40px;
+  letter-spacing: 0.18em;
+  line-height: 1.1;
+}
+.ad-flash .gate-dir { font-size: 16px; font-weight: 700; }
 .ad-dl { display: grid; grid-template-columns: 140px 1fr; gap: 8px 12px; }
 .ad-dl dt { color: #80b3ff; }
 .sms-help { margin-top: 28px; padding: 20px; border: 1px solid #163c63; }

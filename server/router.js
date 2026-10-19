@@ -10,13 +10,13 @@ import enDefaults from '../src/i18n/en.js'
 import { DEFAULT_MEDIA } from '../src/lib/cms.js'
 import { sendOtp, smsConfigured } from './sms.js'
 import { statusUrl } from './qr.js'
-import { barcodeDataUrl, tehranDay, codesMatch, normTrack } from './barcode.js'
+import { barcodeDataUrl, tehranDay, codesMatch, displayCode } from './barcode.js'
 import { IS_PROD } from './env.js'
 import {
   clip, clientIp, hitLimit, parseFile, readPerson, assertPerson,
 } from './validate.js'
 import { excelXml, reportHtml, sendDownload, registrationRows, secretariatRows } from './report.js'
-import { upsertRegistration, upsertSecretariat, upsertFile, insertCheckin } from './tables.js'
+import { upsertRegistration, upsertSecretariat, upsertFile, insertCheckin, insertScan } from './tables.js'
 
 const ALLOWED_IMG = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'])
 
@@ -63,17 +63,17 @@ function need(session, roles) {
 
 function withBarcode(r) {
   if (!r) return r
-  if (r.barcode) return r
-  try { r.barcode = barcodeDataUrl(r.code) } catch { /* ignore */ }
+  try { r.barcode = barcodeDataUrl(displayCode(r.code)) } catch { /* ignore */ }
   return r
 }
 
 function publicReg(r, { barcode } = {}) {
   if (!r) return null
   const name = [r.firstName, r.lastName].filter(Boolean).join(' ')
+  const code = displayCode(r.code)
   const out = {
     id: r.id,
-    code: r.code,
+    code,
     status: r.status,
     firstName: r.firstName || '',
     lastName: r.lastName || '',
@@ -87,22 +87,55 @@ function publicReg(r, { barcode } = {}) {
     checkedInAt: r.checkedInAt || 0,
     checkins: r.checkins || [],
   }
-  if (barcode) out.barcode = r.barcode || barcodeDataUrl(r.code)
+  if (barcode) out.barcode = barcodeDataUrl(code)
   return out
 }
 
 function findReg(d, scanned) {
-  const n = normTrack(scanned)
+  const n = displayCode(scanned)
   if (!n) return null
   return d.registrations.find((r) => codesMatch(r.code, n) || r.id === n) || null
 }
 
 function uniqueCode(d) {
-  for (let i = 0; i < 16; i++) {
-    const code = trackingCode()
-    if (!d.registrations.some((r) => r.code === code)) return code
+  d.seq = Math.max(1, Number(d.seq) || 1)
+  for (let i = 0; i < 40; i++) {
+    const code = trackingCode(d.seq)
+    d.seq += 1
+    if (!d.registrations.some((r) => codesMatch(r.code, code))) return code
   }
-  return `ATW26-${Date.now().toString(36).toUpperCase()}`
+  return `ATW${String(Date.now()).slice(-9)}`
+}
+
+function faWhen(ms) {
+  if (!ms) return ''
+  return new Date(ms).toLocaleString('fa-IR', { timeZone: 'Asia/Tehran' })
+}
+
+function normalizeDay(c) {
+  if (!c) return null
+  if (c.inAt || c.lastDir || typeof c.inside === 'boolean') {
+    return {
+      day: c.day,
+      inAt: c.inAt || c.at || 0,
+      outAt: c.outAt || 0,
+      inside: c.inside === true,
+      lastAt: c.lastAt || c.outAt || c.inAt || c.at || 0,
+      lastDir: c.lastDir || (c.inside ? 'in' : 'out'),
+      by: c.by || '',
+      scans: Array.isArray(c.scans) ? c.scans : [],
+    }
+  }
+  return {
+    day: c.day,
+    inAt: c.at || 0,
+    outAt: 0,
+    inside: true,
+    lastAt: c.at || 0,
+    lastDir: 'in',
+    by: c.by || '',
+    scans: [{ at: c.at, dir: 'in', by: c.by || '' }],
+  }
 }
 
 function fileMeta(rec) {
@@ -445,6 +478,7 @@ export async function handleApi(req, res) {
         const by = {}
         const byDayMap = {}
         const entryByDay = {}
+        const exitByDay = {}
         let checkedIn = 0
         const today = tehranDay()
         const start = Date.now() - 13 * 86400000
@@ -452,35 +486,46 @@ export async function handleApi(req, res) {
           const day = tehranDay(start + i * 86400000)
           byDayMap[day] = 0
           entryByDay[day] = 0
+          exitByDay[day] = 0
         }
         const inside = []
+        const todayPeople = []
         for (const r of d.registrations) {
           by[r.status] = (by[r.status] || 0) + 1
-          const ins = r.checkins || []
-          if (r.status === 'checked_in' || r.checkedInAt || ins.length) checkedIn += 1
-          const day = tehranDay(r.createdAt || 0)
-          if (day in byDayMap) byDayMap[day] += 1
-          const days = new Set(ins.map((c) => c.day))
+          const days = (r.checkins || []).map(normalizeDay).filter(Boolean)
+          if (r.status === 'checked_in' || r.checkedInAt || days.length) checkedIn += 1
+          const createdDay = tehranDay(r.createdAt || 0)
+          if (createdDay in byDayMap) byDayMap[createdDay] += 1
           for (const ed of days) {
-            if (ed in entryByDay) entryByDay[ed] += 1
+            if (ed.day in entryByDay) entryByDay[ed.day] += 1
+            if (ed.outAt && ed.day in exitByDay) exitByDay[ed.day] += 1
           }
-          const todayHit = ins.filter((c) => c.day === today).sort((a, b) => b.at - a.at)[0]
-          if (todayHit) {
-            inside.push({
+          const todayRow = days.find((c) => c.day === today)
+          if (todayRow) {
+            const person = {
               id: r.id,
-              code: r.code,
+              code: displayCode(r.code),
               firstName: r.firstName || '',
               lastName: r.lastName || '',
-              name: [r.firstName, r.lastName].filter(Boolean).join(' ') || r.companyName || r.code,
+              name: [r.firstName, r.lastName].filter(Boolean).join(' ') || r.companyName || displayCode(r.code),
               mobile: r.mobile,
               companyName: r.companyName || '',
-              at: todayHit.at,
-              firstEntryAt: r.checkedInAt || todayHit.at,
-              checkedInAt: r.checkedInAt || todayHit.at,
-            })
+              at: todayRow.lastAt || todayRow.inAt,
+              inAt: todayRow.inAt,
+              outAt: todayRow.outAt || 0,
+              inside: todayRow.inside,
+              lastDir: todayRow.lastDir,
+              firstEntryAt: r.checkedInAt || todayRow.inAt,
+              checkedInAt: r.checkedInAt || todayRow.inAt,
+            }
+            todayPeople.push(person)
+            if (todayRow.inside) inside.push(person)
           }
         }
         inside.sort((a, b) => b.at - a.at)
+        todayPeople.sort((a, b) => b.at - a.at)
+        const traffic = (d.scans || []).filter((x) => x.day === today).slice(0, 80)
+        const deniedToday = traffic.filter((x) => x.allowed === false).length
         const secs = d.secretariat || []
         return json(res, 200, {
           role: s.role,
@@ -494,12 +539,18 @@ export async function handleApi(req, res) {
             byStatus: by,
             checkedIn,
             todayIn: inside.length,
+            todayPeople: todayPeople.length,
+            todayPass: traffic.filter((x) => x.allowed !== false).length,
+            deniedToday,
             secretariat: secs.length,
             secretariatNew: secs.filter((m) => m.status === 'new').length,
             byDay: Object.keys(byDayMap).sort().map((k) => ({ d: k, n: byDayMap[k] })),
             entryByDay: Object.keys(entryByDay).sort().map((k) => ({ d: k, n: entryByDay[k] })),
+            exitByDay: Object.keys(exitByDay).sort().map((k) => ({ d: k, n: exitByDay[k] })),
           },
           inside,
+          todayPeople,
+          traffic,
           content: d.content,
         })
       }
@@ -552,39 +603,121 @@ export async function handleApi(req, res) {
 
       if (path === '/admin/checkin' && method === 'POST') {
         const b = await readBody(req)
-        const code = normTrack(b.code)
-        let already = false
+        const raw = String(b.code || '')
+        const code = displayCode(raw)
         const now = Date.now()
         const day = tehranDay(now)
-        const row = await mutate((d) => {
+        if (!code) {
+          return json(res, 200, { allowed: false, message: 'غیر مجاز' })
+        }
+        const result = await mutate((d) => {
+          d.scans = d.scans || []
           const r = findReg(d, code)
-          if (!r) return null
-          r.checkins = r.checkins || []
-          already = r.checkins.some((c) => c.day === day)
-          if (!already) {
-            r.checkins.push({ at: now, day, by: s.user })
-            r.status = 'checked_in'
-            r.checkedInAt = r.checkedInAt || now
-            r.checkedInBy = s.user
-            r.updatedAt = now
-            upsertRegistration(r).catch(() => {})
-            insertCheckin({
-              id: `${r.id}_${day}`,
-              registrationId: r.id,
-              code: r.code,
+          if (!r) {
+            const rec = {
+              id: newId('scan'),
+              registrationId: '',
+              code,
+              raw,
               day,
+              dir: 'deny',
+              allowed: false,
               at: now,
               by: s.user,
-            }).catch(() => {})
+              name: '',
+              mobile: '',
+            }
+            d.scans.unshift(rec)
+            d.scans = d.scans.slice(0, 3000)
+            insertScan(rec).catch(() => {})
+            return { allowed: false }
           }
-          return r
+          const firstEver = !r.checkedInAt
+          r.checkins = (r.checkins || []).map(normalizeDay).filter(Boolean)
+          let row = r.checkins.find((c) => c.day === day)
+          let dir = 'in'
+          if (!row) {
+            row = {
+              day,
+              inAt: now,
+              outAt: 0,
+              inside: true,
+              lastAt: now,
+              lastDir: 'in',
+              by: s.user,
+              scans: [{ at: now, dir: 'in', by: s.user }],
+            }
+            r.checkins.push(row)
+            dir = 'in'
+          } else if (row.inside) {
+            dir = 'out'
+            row.inside = false
+            row.lastDir = 'out'
+            row.outAt = now
+            row.lastAt = now
+            row.by = s.user
+            row.scans = row.scans || []
+            row.scans.push({ at: now, dir: 'out', by: s.user })
+          } else {
+            dir = 'in'
+            row.inside = true
+            row.lastDir = 'in'
+            row.lastAt = now
+            row.by = s.user
+            if (!row.inAt) row.inAt = now
+            row.scans = row.scans || []
+            row.scans.push({ at: now, dir: 'in', by: s.user })
+          }
+          if (dir === 'in' && !r.checkedInAt) r.checkedInAt = now
+          r.status = 'checked_in'
+          r.checkedInBy = s.user
+          r.updatedAt = now
+          const scan = {
+            id: newId('scan'),
+            registrationId: r.id,
+            code: displayCode(r.code),
+            raw,
+            day,
+            dir,
+            allowed: true,
+            at: now,
+            by: s.user,
+            name: [r.firstName, r.lastName].filter(Boolean).join(' ') || r.companyName || '',
+            mobile: r.mobile || '',
+          }
+          d.scans.unshift(scan)
+          d.scans = d.scans.slice(0, 3000)
+          upsertRegistration(r).catch(() => {})
+          insertCheckin({
+            id: `${r.id}_${day}`,
+            registrationId: r.id,
+            code: displayCode(r.code),
+            day,
+            inAt: row.inAt,
+            outAt: row.outAt,
+            at: row.inAt,
+            lastAt: row.lastAt,
+            lastDir: row.lastDir,
+            inside: row.inside,
+            by: s.user,
+            scans: row.scans,
+            scanCount: row.scans.length,
+          }).catch(() => {})
+          insertScan(scan).catch(() => {})
+          return { allowed: true, row: r, dir, firstEver, dayRow: row }
         })
-        if (!row) return json(res, 404, { error: 'not_found', message: 'کد بارکد یافت نشد.' })
-        const name = [row.firstName, row.lastName].filter(Boolean).join(' ') || row.companyName || row.code
+        if (!result?.allowed) {
+          return json(res, 200, { allowed: false, message: 'غیر مجاز' })
+        }
+        const row = result.row
+        const name = [row.firstName, row.lastName].filter(Boolean).join(' ') || row.companyName || displayCode(row.code)
         const item = withBarcode(row)
         return json(res, 200, {
           item,
-          already,
+          allowed: true,
+          message: 'مجاز',
+          dir: result.dir,
+          firstEver: Boolean(result.firstEver),
           day,
           name,
           firstName: row.firstName || '',
@@ -789,17 +922,21 @@ export async function handleApi(req, res) {
       if (path === '/admin/presence.xls' || path === '/admin/presence.pdf') {
         const d = await load()
         const today = tehranDay()
-        const headers = ['code', 'name', 'mobile', 'company', 'time']
+        const headers = ['کد', 'نام', 'موبایل', 'شرکت', 'اولین ورود', 'ورود امروز', 'خروج امروز', 'وضعیت', 'اسکن امروز']
         const rows = []
         for (const r of d.registrations) {
-          const hit = (r.checkins || []).filter((c) => c.day === today).sort((a, b) => b.at - a.at)[0]
-          if (!hit) continue
+          const todayRow = (r.checkins || []).map(normalizeDay).find((c) => c.day === today)
+          if (!todayRow) continue
           rows.push([
-            r.code,
+            displayCode(r.code),
             [r.firstName, r.lastName].filter(Boolean).join(' ') || r.companyName || '',
             r.mobile || '',
             r.companyName || '',
-            new Date(hit.at).toLocaleString('fa-IR', { timeZone: 'Asia/Tehran' }),
+            faWhen(r.checkedInAt || todayRow.inAt),
+            faWhen(todayRow.inAt),
+            faWhen(todayRow.outAt),
+            todayRow.inside ? 'داخل' : 'خارج',
+            String((todayRow.scans || []).length || 1),
           ])
         }
         if (path.endsWith('.xls')) {
@@ -813,7 +950,7 @@ export async function handleApi(req, res) {
         sendDownload(res, {
           mime: 'text/html; charset=utf-8',
           filename: `atw-presence-${today}.html`,
-          body: reportHtml({ title: `ورود امروز ${today}`, headers, rows, rtl: true }),
+          body: reportHtml({ title: `ورود و خروج امروز ${today}`, headers, rows, rtl: true }),
         })
         return
       }
