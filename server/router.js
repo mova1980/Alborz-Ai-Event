@@ -9,13 +9,14 @@ import faDefaults from '../src/i18n/fa.js'
 import enDefaults from '../src/i18n/en.js'
 import { DEFAULT_MEDIA } from '../src/lib/cms.js'
 import { sendOtp, smsConfigured } from './sms.js'
-import { makeQr, statusUrl } from './qr.js'
+import { statusUrl } from './qr.js'
+import { barcodeDataUrl, tehranDay, codesMatch, normTrack } from './barcode.js'
 import { IS_PROD } from './env.js'
 import {
   clip, clientIp, hitLimit, parseFile, readPerson, assertPerson,
 } from './validate.js'
 import { excelXml, reportHtml, sendDownload, registrationRows, secretariatRows } from './report.js'
-import { upsertRegistration, upsertSecretariat, upsertFile } from './tables.js'
+import { upsertRegistration, upsertSecretariat, upsertFile, insertCheckin } from './tables.js'
 
 const ALLOWED_IMG = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'])
 
@@ -60,7 +61,14 @@ function need(session, roles) {
   return null
 }
 
-function publicReg(r, { qr } = {}) {
+function withBarcode(r) {
+  if (!r) return r
+  if (r.barcode) return r
+  try { r.barcode = barcodeDataUrl(r.code) } catch { /* ignore */ }
+  return r
+}
+
+function publicReg(r, { barcode } = {}) {
   if (!r) return null
   const name = [r.firstName, r.lastName].filter(Boolean).join(' ')
   const out = {
@@ -77,9 +85,16 @@ function publicReg(r, { qr } = {}) {
     adminNote: r.adminNote || '',
     statusUrl: r.statusUrl,
     checkedInAt: r.checkedInAt || 0,
+    checkins: r.checkins || [],
   }
-  if (qr) out.qr = r.qr
+  if (barcode) out.barcode = r.barcode || barcodeDataUrl(r.code)
   return out
+}
+
+function findReg(d, scanned) {
+  const n = normTrack(scanned)
+  if (!n) return null
+  return d.registrations.find((r) => codesMatch(r.code, n) || r.id === n) || null
 }
 
 function uniqueCode(d) {
@@ -197,7 +212,7 @@ export async function handleApi(req, res) {
       }
       const token = signToken({ role: 'company', mobile }, 60 * 60 * 24 * 7)
       const data = await load()
-      const mine = data.registrations.filter((r) => r.mobile === mobile).map((r) => publicReg(r, { qr: true }))
+      const mine = data.registrations.filter((r) => r.mobile === mobile).map((r) => publicReg(r, { barcode: true }))
       return json(res, 200, { ok: true, token, mobile, registrations: mine })
     }
 
@@ -206,7 +221,7 @@ export async function handleApi(req, res) {
       if (!s) return json(res, 401, { error: 'auth' })
       if (s.role === 'company') {
         const data = await load()
-        const mine = data.registrations.filter((r) => r.mobile === s.mobile).map((r) => publicReg(r, { qr: true }))
+        const mine = data.registrations.filter((r) => r.mobile === s.mobile).map((r) => publicReg(r, { barcode: true }))
         return json(res, 200, { role: 'company', mobile: s.mobile, registrations: mine })
       }
       return json(res, 200, { role: s.role, user: s.user })
@@ -226,7 +241,7 @@ export async function handleApi(req, res) {
       const code = decodeURIComponent(path.slice('/status/'.length)).trim().toUpperCase()
       const r = await getRegByCode(code)
       if (!r) return json(res, 404, { error: 'not_found', message: 'کد پیگیری یافت نشد.' })
-      return json(res, 200, { registration: publicReg(r, { qr: true }) })
+      return json(res, 200, { registration: publicReg(r, { barcode: true }) })
     }
 
     if (path === '/status/lookup' && method === 'POST') {
@@ -236,7 +251,7 @@ export async function handleApi(req, res) {
       if (!r) return json(res, 404, { error: 'not_found', message: 'کد پیگیری یافت نشد.' })
       const mobile = body.mobile ? normalizeMobile(body.mobile) : ''
       if (mobile && r.mobile !== mobile) return json(res, 404, { error: 'not_found', message: 'کد یا شماره هم‌خوان نیست.' })
-      return json(res, 200, { registration: publicReg(r, { qr: true }) })
+      return json(res, 200, { registration: publicReg(r, { barcode: true }) })
     }
 
     /* ---------- Public register (no SMS) ---------- */
@@ -287,7 +302,7 @@ export async function handleApi(req, res) {
         }
         const code = uniqueCode(d)
         const statusLink = statusUrl(origin, code)
-        const qr = await makeQr(statusLink)
+        const barcode = barcodeDataUrl(code)
         const now = Date.now()
         const row = {
           id: newId('reg'),
@@ -311,11 +326,12 @@ export async function handleApi(req, res) {
           staff,
           booth: '',
           adminNote: '',
-          qr,
+          barcode,
           statusUrl: statusLink,
           createdAt: now,
           updatedAt: now,
           checkedInAt: 0,
+          checkins: [],
           ip,
         }
         d.registrations.unshift(row)
@@ -328,7 +344,7 @@ export async function handleApi(req, res) {
       }
       if (!rec) return json(res, 500, { error: 'server', message: 'ثبت انجام نشد.' })
       upsertRegistration(rec).catch(() => {})
-      return json(res, 201, { ok: true, registration: publicReg(rec, { qr: true }) })
+      return json(res, 201, { ok: true, registration: publicReg(rec, { barcode: true }) })
     }
 
     /* ---------- Secretariat ---------- */
@@ -428,33 +444,62 @@ export async function handleApi(req, res) {
         const d = await load()
         const by = {}
         const byDayMap = {}
+        const entryByDay = {}
         let checkedIn = 0
+        const today = tehranDay()
         const start = Date.now() - 13 * 86400000
         for (let i = 0; i < 14; i++) {
-          const day = new Date(start + i * 86400000).toISOString().slice(0, 10)
+          const day = tehranDay(start + i * 86400000)
           byDayMap[day] = 0
+          entryByDay[day] = 0
         }
+        const inside = []
         for (const r of d.registrations) {
           by[r.status] = (by[r.status] || 0) + 1
-          if (r.status === 'checked_in' || r.checkedInAt) checkedIn += 1
-          const day = new Date(r.createdAt || 0).toISOString().slice(0, 10)
+          const ins = r.checkins || []
+          if (r.status === 'checked_in' || r.checkedInAt || ins.length) checkedIn += 1
+          const day = tehranDay(r.createdAt || 0)
           if (day in byDayMap) byDayMap[day] += 1
+          const days = new Set(ins.map((c) => c.day))
+          for (const ed of days) {
+            if (ed in entryByDay) entryByDay[ed] += 1
+          }
+          const todayHit = ins.filter((c) => c.day === today).sort((a, b) => b.at - a.at)[0]
+          if (todayHit) {
+            inside.push({
+              id: r.id,
+              code: r.code,
+              firstName: r.firstName || '',
+              lastName: r.lastName || '',
+              name: [r.firstName, r.lastName].filter(Boolean).join(' ') || r.companyName || r.code,
+              mobile: r.mobile,
+              companyName: r.companyName || '',
+              at: todayHit.at,
+              firstEntryAt: r.checkedInAt || todayHit.at,
+              checkedInAt: r.checkedInAt || todayHit.at,
+            })
+          }
         }
+        inside.sort((a, b) => b.at - a.at)
         const secs = d.secretariat || []
         return json(res, 200, {
           role: s.role,
           persistence: persistenceKind(),
           sms: smsConfigured(),
+          today,
           counts: {
             registrations: d.registrations.length,
             messages: d.messages.length,
             unread: d.messages.filter((m) => m.status === 'new').length,
             byStatus: by,
             checkedIn,
+            todayIn: inside.length,
             secretariat: secs.length,
             secretariatNew: secs.filter((m) => m.status === 'new').length,
             byDay: Object.keys(byDayMap).sort().map((k) => ({ d: k, n: byDayMap[k] })),
+            entryByDay: Object.keys(entryByDay).sort().map((k) => ({ d: k, n: entryByDay[k] })),
           },
+          inside,
           content: d.content,
         })
       }
@@ -477,7 +522,7 @@ export async function handleApi(req, res) {
         const id = path.slice('/admin/registrations/'.length)
         const r = await getRegById(id) || await getRegByCode(id)
         if (!r) return json(res, 404, { error: 'not_found' })
-        return json(res, 200, { item: r })
+        return json(res, 200, { item: withBarcode(r) })
       }
 
       if (path.startsWith('/admin/registrations/') && method === 'PATCH') {
@@ -507,23 +552,47 @@ export async function handleApi(req, res) {
 
       if (path === '/admin/checkin' && method === 'POST') {
         const b = await readBody(req)
-        const code = String(b.code || '').trim().toUpperCase()
+        const code = normTrack(b.code)
         let already = false
+        const now = Date.now()
+        const day = tehranDay(now)
         const row = await mutate((d) => {
-          const r = d.registrations.find((x) => x.code === code || x.id === code)
+          const r = findReg(d, code)
           if (!r) return null
-          already = Boolean(r.checkedInAt)
+          r.checkins = r.checkins || []
+          already = r.checkins.some((c) => c.day === day)
           if (!already) {
+            r.checkins.push({ at: now, day, by: s.user })
             r.status = 'checked_in'
-            r.checkedInAt = Date.now()
+            r.checkedInAt = r.checkedInAt || now
             r.checkedInBy = s.user
-            r.updatedAt = Date.now()
+            r.updatedAt = now
             upsertRegistration(r).catch(() => {})
+            insertCheckin({
+              id: `${r.id}_${day}`,
+              registrationId: r.id,
+              code: r.code,
+              day,
+              at: now,
+              by: s.user,
+            }).catch(() => {})
           }
           return r
         })
-        if (!row) return json(res, 404, { error: 'not_found', message: 'کد یافت نشد.' })
-        return json(res, 200, { item: row, already })
+        if (!row) return json(res, 404, { error: 'not_found', message: 'کد بارکد یافت نشد.' })
+        const name = [row.firstName, row.lastName].filter(Boolean).join(' ') || row.companyName || row.code
+        const item = withBarcode(row)
+        return json(res, 200, {
+          item,
+          already,
+          day,
+          name,
+          firstName: row.firstName || '',
+          lastName: row.lastName || '',
+          mobile: row.mobile,
+          checkedInAt: row.checkedInAt || 0,
+          barcode: item.barcode,
+        })
       }
 
       if (path === '/admin/messages' && method === 'GET') {
@@ -713,6 +782,38 @@ export async function handleApi(req, res) {
           mime: 'text/html; charset=utf-8',
           filename: 'atw-secretariat.html',
           body: reportHtml({ title: 'دبیرخانه هفته تکنولوژی البرز', headers, rows, rtl: true }),
+        })
+        return
+      }
+
+      if (path === '/admin/presence.xls' || path === '/admin/presence.pdf') {
+        const d = await load()
+        const today = tehranDay()
+        const headers = ['code', 'name', 'mobile', 'company', 'time']
+        const rows = []
+        for (const r of d.registrations) {
+          const hit = (r.checkins || []).filter((c) => c.day === today).sort((a, b) => b.at - a.at)[0]
+          if (!hit) continue
+          rows.push([
+            r.code,
+            [r.firstName, r.lastName].filter(Boolean).join(' ') || r.companyName || '',
+            r.mobile || '',
+            r.companyName || '',
+            new Date(hit.at).toLocaleString('fa-IR', { timeZone: 'Asia/Tehran' }),
+          ])
+        }
+        if (path.endsWith('.xls')) {
+          sendDownload(res, {
+            mime: 'application/vnd.ms-excel; charset=utf-8',
+            filename: `atw-presence-${today}.xls`,
+            body: excelXml('presence', headers, rows),
+          })
+          return
+        }
+        sendDownload(res, {
+          mime: 'text/html; charset=utf-8',
+          filename: `atw-presence-${today}.html`,
+          body: reportHtml({ title: `ورود امروز ${today}`, headers, rows, rtl: true }),
         })
         return
       }

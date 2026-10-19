@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import PageShell from './PageShell'
 import DiamondButton from '../components/DiamondButton'
+import TicketPreview from '../components/TicketPreview'
 import { useI18n } from '../context/Language'
 import { api } from '../lib/api'
 
@@ -13,6 +14,7 @@ export default function Register() {
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(null)
+  const [preview, setPreview] = useState(false)
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -38,10 +40,7 @@ export default function Register() {
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
   const req = (label) => `${label} *`
 
-  const ticketHref = useMemo(() => {
-    if (!done?.qr) return ''
-    return done.qr
-  }, [done])
+  const ticketHref = useMemo(() => done?.barcode || '', [done])
 
   async function submit(e) {
     e.preventDefault()
@@ -154,15 +153,27 @@ export default function Register() {
           <h3>{r.successTitle}</h3>
           <p className="lead">{r.successLead}</p>
           {done.displayName ? <p>{done.displayName}</p> : null}
-          <div className="qr-box">
-            <img src={done.qr} alt={done.code} />
+          <div className="barcode-box">
+            {ticketHref ? <img src={ticketHref} alt={done.code} /> : null}
           </div>
           <div className="track-code">{done.code}</div>
           <p>{r.keepCode}</p>
           <div className="reg-bar" style={{ justifyContent: 'center' }}>
-            {ticketHref ? <a className="text-link" href={ticketHref} download={`${done.code}.png`}>{r.downloadQr}</a> : null}
+            <button type="button" className="text-link" onClick={() => setPreview(true)}>{r.printTicket}</button>
             <a className="text-link" href={path(`/status/${done.code}`)}>{r.watchStatus}</a>
           </div>
+          <TicketPreview
+            open={preview}
+            ticket={done}
+            onClose={() => setPreview(false)}
+            labels={{
+              title: r.previewTitle,
+              lead: r.previewLead,
+              confirm: r.previewConfirm,
+              cancel: r.previewCancel,
+              pending: r.previewPending,
+            }}
+          />
         </div>
       )}
     </PageShell>

@@ -1023,6 +1023,13 @@ body.scrolled .header {
   clip-path: polygon(8% 0, 100% 0, 92% 100%, 0 100%);
 }
 .qr-box img { width: 100%; height: auto; }
+.barcode-box {
+  width: min(420px, 100%);
+  margin: 18px auto;
+  padding: 10px 8px 6px;
+  background: #fff;
+}
+.barcode-box img, .barcode-box svg { width: 100%; height: auto; display: block; }
 .track-code {
   font-size: 22px;
   letter-spacing: 0.12em;

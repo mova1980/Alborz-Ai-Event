@@ -55,6 +55,20 @@ export async function upsertSecretariat(row) {
   if (error) console.error('atw_secretariat', error.message)
 }
 
+export async function insertCheckin(row) {
+  const s = sb()
+  if (!s || !row) return
+  const { error } = await s.from('atw_checkins').upsert({
+    id: row.id,
+    registration_id: row.registrationId,
+    code: row.code,
+    day: row.day,
+    checked_in_at: iso(row.at),
+    checked_in_by: row.by || '',
+  })
+  if (error) console.error('atw_checkins', error.message)
+}
+
 export async function upsertFile(meta) {
   const s = sb()
   if (!s || !meta) return

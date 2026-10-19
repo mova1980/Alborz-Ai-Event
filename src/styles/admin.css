@@ -139,6 +139,30 @@
   gap: 28px;
 }
 .ad-qr { width: 220px; background: #fff; padding: 8px; }
+.ad-barcode { width: 100%; max-width: 320px; background: #fff; padding: 10px 8px; display: block; margin: 8px 0 12px; }
+.ad-gate {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 18px;
+}
+.ad-gate input {
+  flex: 1;
+  font-size: 22px;
+  padding: 16px 18px;
+  letter-spacing: 0.08em;
+}
+.ad-flash {
+  border: 1px solid #163c63;
+  padding: 16px 18px;
+  margin-bottom: 18px;
+  display: grid;
+  gap: 4px;
+  background: #081421;
+}
+.ad-flash.is-ok { border-color: #0055ff; background: rgba(0, 85, 255, 0.14); }
+.ad-flash.is-warn { border-color: #4d94ff; }
+.ad-flash.is-bad { border-color: #ff4d6a; background: rgba(255, 77, 106, 0.12); }
+.ad-flash .ad-btn { margin-top: 8px; width: max-content; }
 .ad-dl { display: grid; grid-template-columns: 140px 1fr; gap: 8px 12px; }
 .ad-dl dt { color: #80b3ff; }
 .sms-help { margin-top: 28px; padding: 20px; border: 1px solid #163c63; }

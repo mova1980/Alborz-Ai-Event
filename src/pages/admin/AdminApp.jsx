@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import '../../styles/admin.css'
 import { Link, NavLink, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import ContentStudio from './ContentStudio'
 import { api, errorText, getToken, setToken } from '../../lib/api'
+import TicketPreview from '../../components/TicketPreview'
 
 const STATUSES = ['submitted', 'reviewing', 'approved', 'waitlist', 'rejected', 'checked_in']
 const ST_FA = {
@@ -78,6 +79,7 @@ function Login({ onOk }) {
 function Shell({ me, onOut, children }) {
   const nav = [
     ['/admin', 'نمای کلی', false],
+    ['/admin/gate', 'ورود / گیت', false],
     ['/admin/content', 'محتوای سایت', true],
     ['/admin/media', 'تصاویر و لوگو', true],
     ['/admin/registrations', 'ثبت‌نام‌ها', false],
@@ -136,7 +138,13 @@ async function openPrint(path) {
 
 function Overview() {
   const [d, setD] = useState(null)
-  useEffect(() => { api('/admin/overview', { admin: true }).then(setD).catch(() => {}) }, [])
+  useEffect(() => {
+    let stop = false
+    const load = () => api('/admin/overview', { admin: true }).then((x) => { if (!stop) setD(x) }).catch(() => {})
+    load()
+    const id = setInterval(load, 8000)
+    return () => { stop = true; clearInterval(id) }
+  }, [])
   if (!d) return <p>در حال بارگذاری…</p>
   const c = d.counts
   return (
@@ -144,9 +152,9 @@ function Overview() {
       <h1>نمای کلی</h1>
       <div className="ad-stats">
         <article><b>{c.registrations}</b><span>ثبت‌نام</span></article>
-        <article><b>{c.checkedIn || 0}</b><span>ورود به میدان</span></article>
-        <article><b>{c.secretariat || 0}</b><span>دبیرخانه</span></article>
-        <article><b>{c.secretariatNew || 0}</b><span>نامه جدید</span></article>
+        <article><b>{c.todayIn || 0}</b><span>الان در مجموعه (امروز)</span></article>
+        <article><b>{c.checkedIn || 0}</b><span>کل ورود ثبت‌شده</span></article>
+        <article><b>{c.secretariatNew || 0}</b><span>نامه جدید دبیرخانه</span></article>
       </div>
       <div className="ad-charts">
         <section className="ad-card">
@@ -154,14 +162,175 @@ function Overview() {
           <Bars items={STATUSES.map((s) => ({ l: ST_FA[s], n: c.byStatus?.[s] || 0 }))} />
         </section>
         <section className="ad-card">
-          <h2>ثبت روزانه</h2>
-          <Bars items={(c.byDay || []).map((x) => ({ l: x.d.slice(5), n: x.n }))} />
+          <h2>ورود روزانه (اسکن گیت)</h2>
+          <Bars items={(c.entryByDay || []).map((x) => ({ l: x.d.slice(5), n: x.n }))} />
         </section>
+      </div>
+      <div className="ad-head">
+        <h2>حاضرین امروز</h2>
+        <div className="ad-export">
+          <button className="ad-btn ghost" type="button" onClick={() => download('/admin/presence.xls', 'atw-presence.xls')}>Excel ورود</button>
+          <button className="ad-btn ghost" type="button" onClick={() => openPrint('/admin/presence.pdf')}>چاپ ورود</button>
+        </div>
+      </div>
+      <div className="ad-table-wrap">
+        <table className="ad-table">
+          <thead>
+            <tr><th>ساعت</th><th>نام</th><th>موبایل</th><th>کد</th></tr>
+          </thead>
+          <tbody>
+            {(d.inside || []).slice(0, 12).map((p) => (
+              <tr key={p.id}>
+                <td>{new Date(p.at).toLocaleTimeString('fa-IR', { timeZone: 'Asia/Tehran' })}</td>
+                <td>{p.name}</td>
+                <td className="mono">{p.mobile}</td>
+                <td className="mono">{p.code}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
       {d.persistence === 'ephemeral' && (
         <div className="form-error">داده روی Vercel بدون Supabase موقت است. SUPABASE_URL و SUPABASE_SERVICE_ROLE_KEY را در Environment Variables بگذارید — فایل SUPABASE.md.</div>
       )}
-      <p className="muted" style={{ marginTop: 24 }}>خروجی اکسل و PDF از صفحات ثبت‌نام و دبیرخانه. قالب سایت عوض نمی‌شود.</p>
+    </>
+  )
+}
+
+function ticketOf(r, extra = {}) {
+  if (!r) return null
+  return {
+    code: r.code,
+    barcode: r.barcode || extra.barcode,
+    firstName: r.firstName || extra.firstName || '',
+    lastName: r.lastName || extra.lastName || '',
+    displayName: r.displayName || r.name || extra.displayName || extra.name,
+    firstEntryAt: r.firstEntryAt || r.checkedInAt || extra.firstEntryAt || extra.checkedInAt || r.at || extra.at || 0,
+  }
+}
+
+function Gate() {
+  const inputRef = useRef(null)
+  const [code, setCode] = useState('')
+  const [flash, setFlash] = useState(null)
+  const [d, setD] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [preview, setPreview] = useState(null)
+
+  function focusScan() {
+    inputRef.current?.focus()
+  }
+
+  async function refresh() {
+    const x = await api('/admin/overview', { admin: true })
+    setD(x)
+  }
+
+  useEffect(() => {
+    refresh().catch(() => {})
+    const id = setInterval(() => refresh().catch(() => {}), 4000)
+    const t = setTimeout(focusScan, 200)
+    return () => { clearInterval(id); clearTimeout(t) }
+  }, [])
+
+  async function submit(e) {
+    e?.preventDefault()
+    const raw = code
+    setCode('')
+    if (!raw.trim()) return
+    setBusy(true)
+    try {
+      const out = await api('/admin/checkin', { method: 'POST', admin: true, body: { code: raw } })
+      const ticket = ticketOf(out.item, {
+        barcode: out.barcode,
+        firstName: out.firstName,
+        lastName: out.lastName,
+        checkedInAt: out.checkedInAt,
+      })
+      setFlash({
+        ok: true,
+        already: out.already,
+        name: out.name,
+        mobile: out.mobile,
+        ticket,
+        text: out.already ? 'امروز قبلاً وارد شده است.' : 'ورود ثبت شد.',
+      })
+      if (!out.already) setPreview(ticket)
+      refresh().catch(() => {})
+    } catch (ex) {
+      setFlash({ ok: false, text: errorText(ex, 'بارکد نامعتبر است.'), name: '', mobile: '' })
+    } finally {
+      setBusy(false)
+      setTimeout(focusScan, 50)
+    }
+  }
+
+  const c = d?.counts || {}
+  return (
+    <>
+      <h1>گیت ورود</h1>
+      <p className="muted">اسکنر Cbon N-200 را روی این فیلد بگذارید. با Enter ثبت می‌شود. فیش را با Axiom POS80U چاپ کنید.</p>
+      <div className="ad-stats">
+        <article><b>{c.todayIn || 0}</b><span>الان در مجموعه</span></article>
+        <article><b>{c.checkedIn || 0}</b><span>کل ورود</span></article>
+        <article><b>{c.registrations || 0}</b><span>ثبت‌نام کل</span></article>
+        <article><b>{d?.today || '—'}</b><span>تاریخ تهران</span></article>
+      </div>
+      <form className="ad-gate" onSubmit={submit}>
+        <input
+          ref={inputRef}
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          placeholder="اسکن بارکد خطی…"
+          autoComplete="off"
+          autoFocus
+          disabled={busy}
+        />
+        <button className="ad-btn" type="submit" disabled={busy}>ثبت ورود</button>
+      </form>
+      {flash ? (
+        <div className={`ad-flash ${flash.ok ? (flash.already ? 'is-warn' : 'is-ok') : 'is-bad'}`}>
+          <b>{flash.text}</b>
+          {flash.name ? <span>{flash.name}</span> : null}
+          {flash.mobile ? <span className="mono">{flash.mobile}</span> : null}
+          {flash.ticket ? (
+            <button type="button" className="ad-btn ghost" onClick={() => setPreview(flash.ticket)}>پیش‌نمایش فیش</button>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="ad-head">
+        <h2>لیست زنده امروز</h2>
+        <div className="ad-export">
+          <button className="ad-btn ghost" type="button" onClick={() => download('/admin/presence.xls', 'atw-presence.xls')}>Excel</button>
+          <button className="ad-btn ghost" type="button" onClick={() => openPrint('/admin/presence.pdf')}>چاپ گزارش</button>
+        </div>
+      </div>
+      <div className="ad-table-wrap">
+        <table className="ad-table">
+          <thead>
+            <tr><th>ساعت</th><th>نام</th><th>موبایل</th><th>شرکت</th><th>کد</th><th></th></tr>
+          </thead>
+          <tbody>
+            {(d?.inside || []).map((p) => (
+              <tr key={p.id}>
+                <td>{new Date(p.at).toLocaleTimeString('fa-IR', { timeZone: 'Asia/Tehran' })}</td>
+                <td>{p.name}</td>
+                <td className="mono">{p.mobile}</td>
+                <td>{p.companyName || '—'}</td>
+                <td className="mono">{p.code}</td>
+                <td>
+                  <button type="button" className="ad-btn ghost" onClick={() => setPreview(ticketOf(p))}>فیش</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <TicketPreview
+        open={!!preview}
+        ticket={preview}
+        onClose={() => { setPreview(null); setTimeout(focusScan, 50) }}
+      />
     </>
   )
 }
@@ -204,7 +373,7 @@ function Registrations() {
         </div>
       </div>
       <form className="ad-filters" onSubmit={checkin}>
-        <input placeholder="اسکن / ورود کد QR" value={scan} onChange={(e) => setScan(e.target.value)} />
+        <input placeholder="اسکن بارکد Cbon N-200" value={scan} onChange={(e) => setScan(e.target.value)} autoComplete="off" />
         <button className="ad-btn" type="submit">ثبت ورود</button>
         {scanMsg ? <span className="muted">{scanMsg}</span> : null}
       </form>
@@ -246,6 +415,7 @@ function RegistrationDetail() {
   const { id } = useParams()
   const [r, setR] = useState(null)
   const [err, setErr] = useState('')
+  const [preview, setPreview] = useState(false)
   useEffect(() => {
     api(`/admin/registrations/${id}`, { admin: true }).then((o) => setR(o.item)).catch((e) => setErr(e.message))
   }, [id])
@@ -263,7 +433,8 @@ function RegistrationDetail() {
         <section>
           <p className="mono">{r.code}</p>
           <p>{[r.firstName, r.lastName].filter(Boolean).join(' ')}</p>
-          {r.qr ? <img className="ad-qr" src={r.qr} alt="" /> : null}
+          {(r.barcode || r.qr) ? <img className="ad-barcode" src={r.barcode || r.qr} alt="" /> : null}
+          <button className="ad-btn" type="button" onClick={() => setPreview(true)}>پیش‌نمایش فیش POS80U</button>
           <label>وضعیت
             <select value={r.status} onChange={(e) => save({ status: e.target.value })}>
               {STATUSES.map((s) => <option key={s} value={s}>{ST_FA[s]}</option>)}
@@ -281,7 +452,7 @@ function RegistrationDetail() {
             <dt>نام</dt><dd>{r.firstName} {r.lastName}</dd>
             <dt>کد ملی</dt><dd className="mono">{r.nationalId || '—'}</dd>
             <dt>موبایل</dt><dd className="mono">{r.mobile}</dd>
-            <dt>ورود</dt><dd>{r.checkedInAt ? new Date(r.checkedInAt).toLocaleString('fa-IR') : '—'}</dd>
+            <dt>اولین ورود</dt><dd>{r.checkedInAt ? new Date(r.checkedInAt).toLocaleString('fa-IR', { timeZone: 'Asia/Tehran' }) : '—'}</dd>
             <dt>حوزه</dt><dd>{r.activityField || '—'}</dd>
             <dt>محل ثبت</dt><dd>{r.registerPlace}</dd>
             <dt>نوع</dt><dd>{r.companyType}</dd>
@@ -299,6 +470,7 @@ function RegistrationDetail() {
           </dl>
         </section>
       </div>
+      <TicketPreview open={preview} ticket={r} onClose={() => setPreview(false)} />
     </>
   )
 }
@@ -483,6 +655,7 @@ export default function AdminApp() {
     <Shell me={me} onOut={out}>
       <Routes>
         <Route index element={<Overview />} />
+        <Route path="gate" element={<Gate />} />
         <Route path="registrations" element={<Registrations />} />
         <Route path="registrations/:id" element={<RegistrationDetail />} />
         <Route path="secretariat" element={<SecretariatAdmin />} />
